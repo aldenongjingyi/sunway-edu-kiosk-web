@@ -7,6 +7,9 @@ interface Props {
   onTap: () => void;
 }
 
+const SHADOW = "0 8px 32px rgba(0,0,0,0.35)";
+const RADIUS = 16;
+
 export default function Screensaver({ isExpanded, onTap }: Props) {
   const highlights = useDataStore(s => s.highlights);
   const [current, setCurrent] = useState(0);
@@ -30,47 +33,61 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
     onTap();
   };
 
-  const style: React.CSSProperties = isExpanded
+  // Outer wrapper: fullscreen transparent backdrop when expanded, small box when thumbnail
+  const outerStyle: React.CSSProperties = isExpanded
     ? {
         position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        borderRadius: 0,
-        boxShadow: "none",
+        inset: 0,
         zIndex: 50,
-        overflow: "hidden",
         cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "transparent",
       }
     : {
         position: "fixed",
         bottom: 20,
         right: 20,
         width: "min(15vw, 160px)",
-        height: "min(20vw, 213px)",
         aspectRatio: "3 / 4",
-        borderRadius: 10,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
         zIndex: 50,
-        overflow: "hidden",
         cursor: "pointer",
+        borderRadius: RADIUS,
+        overflow: "hidden",
+        boxShadow: SHADOW,
+      };
+
+  // Inner poster: sized portrait container, centered in backdrop when expanded
+  const innerStyle: React.CSSProperties = isExpanded
+    ? {
+        height: "85vh",
+        aspectRatio: "3 / 4",
+        borderRadius: RADIUS,
+        overflow: "hidden",
+        boxShadow: SHADOW,
+        position: "relative",
+        flexShrink: 0,
+      }
+    : {
+        width: "100%",
+        height: "100%",
+        position: "relative",
       };
 
   return (
-    <div style={style} onClick={handleTap}>
-      <div className={`w-full h-full relative ${isExpanded ? "bg-transparent" : "bg-black"}`}>
+    <div style={outerStyle} onClick={handleTap}>
+      <div style={innerStyle}>
         {highlights.map((h, i) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={h.id}
             src={h.image.replace("http:", "https:")}
             alt={h.title}
-            className={`absolute inset-0 w-full h-full ${isExpanded ? "object-contain" : "object-cover"}`}
+            className="absolute inset-0 w-full h-full object-cover"
             style={{
               opacity: i === current % highlights.length ? 1 : 0,
               transition: "opacity 0.7s ease",
-              filter: isExpanded ? "drop-shadow(0 8px 32px rgba(0,0,0,0.35))" : "none",
             }}
           />
         ))}
