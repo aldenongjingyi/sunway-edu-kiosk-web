@@ -3,11 +3,17 @@ import { useDataStore } from "@/lib/store";
 
 export default function PopularTab({ onSelect }: { onSelect: (text: string) => void }) {
   const trendings = useDataStore(s => s.trendings);
+  const loaded = useDataStore(s => s.loaded);
 
   return (
     <div className="flex-1 ios-scroll flex flex-col">
       {/* Trending list */}
       <div className="flex-1 flex flex-col items-center justify-start pt-6">
+        {!loaded && (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-8 h-8 border-2 border-[#00226B] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
         {trendings.map(t => (
           <button
             key={t.id}

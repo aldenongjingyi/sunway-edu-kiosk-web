@@ -110,7 +110,7 @@ export default function KioskShell() {
   };
 
   const handleStaffSelect = (_s: Staff) => {
-    // Directions handoff — web map integration point
+    // TODO: hand off to web map with _s.lotID as destination
     resetIdle();
   };
 

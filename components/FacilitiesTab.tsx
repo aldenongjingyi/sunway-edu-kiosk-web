@@ -4,6 +4,7 @@ import type { Category } from "@/lib/types";
 
 export default function FacilitiesTab({ onSelect }: { onSelect: (c: Category) => void }) {
   const categories = useDataStore(s => s.categories);
+  const loaded = useDataStore(s => s.loaded);
 
   const visible = Object.values(categories)
     .filter(c => !c.hidden && c.parent === null)
@@ -11,6 +12,11 @@ export default function FacilitiesTab({ onSelect }: { onSelect: (c: Category) =>
 
   return (
     <div className="flex-1 ios-scroll">
+      {!loaded && (
+        <div className="flex items-center justify-center h-32">
+          <div className="w-8 h-8 border-2 border-[#00226B] border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
       <div className="grid grid-cols-5 gap-3 p-4">
         {visible.map(cat => (
           <button

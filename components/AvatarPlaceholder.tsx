@@ -3,7 +3,7 @@ export default function AvatarPlaceholder({ src, name }: { src?: string; name?: 
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={src}
+        src={src.replace("http:", "https:")}
         alt={name ?? ""}
         className="w-11 h-11 rounded-full object-cover border border-gray-200 flex-shrink-0"
         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}

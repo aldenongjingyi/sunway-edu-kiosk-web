@@ -85,12 +85,6 @@ export default function SearchResults({ query, filterCategory, filterDepartment,
               <span className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide">Staff</span>
             </div>
           )}
-          {/* Section header when viewing by department */}
-          {filterDepartment && (
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e5ea]">
-              <span className="text-[17px] font-semibold text-black">{filterDepartment}</span>
-            </div>
-          )}
           {matchedStaff.map(s => (
             <StaffRow key={`${s.fullName}-${s.ext}`} staff={s} onSelect={onStaffSelect} />
           ))}
