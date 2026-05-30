@@ -7,9 +7,6 @@ interface Props {
   onTap: () => void;
 }
 
-// Mirror iOS: view is always full-screen, transform scales it to thumbnail
-const THUMBNAIL_SCALE = 0.15;
-
 export default function Screensaver({ isExpanded, onTap }: Props) {
   const highlights = useDataStore(s => s.highlights);
   const [current, setCurrent] = useState(0);
@@ -33,30 +30,32 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
     onTap();
   };
 
-  // Always covers full screen. Use CSS transform to shrink into thumbnail.
-  // transform-origin: bottom right keeps it anchored at that corner when scaled.
-  const style: React.CSSProperties = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 50,
-    cursor: "pointer",
-    overflow: "hidden",
-    transformOrigin: "bottom right",
-    transform: isExpanded ? "scale(1)" : `scale(${THUMBNAIL_SCALE})`,
-    // Visual border-radius: divide by scale so it looks ~10px when thumbnail-sized
-    borderRadius: isExpanded ? 0 : Math.round(10 / THUMBNAIL_SCALE),
-    boxShadow: isExpanded ? "none" : "0 8px 32px rgba(0,0,0,0.4)",
-    transition: [
-      "transform 0.75s cubic-bezier(0.34, 1.56, 0.64, 1)",
-      "border-radius 0.4s ease",
-      "box-shadow 0.4s ease",
-    ].join(", "),
-    // Pointer events: only catch taps when expanded; in thumbnail let taps through the content behind
-    pointerEvents: "auto",
-  };
+  const style: React.CSSProperties = isExpanded
+    ? {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        borderRadius: 0,
+        boxShadow: "none",
+        zIndex: 50,
+        overflow: "hidden",
+        cursor: "pointer",
+      }
+    : {
+        position: "fixed",
+        bottom: 20,
+        right: 20,
+        width: "min(15vw, 160px)",
+        height: "min(20vw, 213px)",
+        aspectRatio: "3 / 4",
+        borderRadius: 10,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+        zIndex: 50,
+        overflow: "hidden",
+        cursor: "pointer",
+      };
 
   return (
     <div style={style} onClick={handleTap}>
