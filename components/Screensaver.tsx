@@ -70,6 +70,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
             style={{
               opacity: i === current % highlights.length ? 1 : 0,
               transition: "opacity 0.7s ease",
+              filter: isExpanded ? "drop-shadow(0 8px 32px rgba(0,0,0,0.35))" : "none",
             }}
           />
         ))}
