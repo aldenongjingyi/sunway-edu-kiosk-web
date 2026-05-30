@@ -58,7 +58,7 @@ export default function KioskShell() {
   }, [resetIdle]);
 
   const handleScreensaverTap = () => {
-    setScreensaverExpanded(false);
+    setScreensaverExpanded(prev => !prev);
     resetIdle();
   };
 
