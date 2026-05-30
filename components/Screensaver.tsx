@@ -59,7 +59,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
 
   return (
     <div style={style} onClick={handleTap}>
-      <div className="w-full h-full bg-black relative">
+      <div className={`w-full h-full relative ${isExpanded ? "bg-transparent" : "bg-black"}`}>
         {highlights.map((h, i) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
