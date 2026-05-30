@@ -66,7 +66,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
             key={h.id}
             src={h.image.replace("http:", "https:")}
             alt={h.title}
-            className="absolute inset-0 w-full h-full object-cover"
+            className={`absolute inset-0 w-full h-full ${isExpanded ? "object-contain" : "object-cover"}`}
             style={{
               opacity: i === current % highlights.length ? 1 : 0,
               transition: "opacity 0.7s ease",
