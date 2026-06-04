@@ -17,21 +17,40 @@ const THUMB = "min(15vw, 160px)";
 
 export default function Screensaver({ isExpanded, onTap }: Props) {
   const highlights = useDataStore(s => s.highlights);
-  const [current, setCurrent] = useState(0);
+
+  // Carousel: append a clone of the first slide for seamless looping
+  const slides = highlights.length > 0 ? [...highlights, highlights[0]] : highlights;
+
+  const [displayIndex, setDisplayIndex] = useState(0);
+  const [slideAnimate, setSlideAnimate] = useState(true);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const advance = () => {
+    setSlideAnimate(true);
+    setDisplayIndex(i => i + 1);
+  };
 
   const restartTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCurrent(c => (c + 1) % Math.max(highlights.length, 1));
-    }, 5000);
+    timerRef.current = setInterval(advance, 5000);
   };
 
   useEffect(() => {
+    // Reset carousel when highlights change
+    setDisplayIndex(0);
+    setSlideAnimate(false);
     restartTimer();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlights.length]);
+
+  // When we land on the clone (last slide), snap silently back to index 0
+  const handleTransitionEnd = () => {
+    if (displayIndex >= highlights.length) {
+      setSlideAnimate(false);
+      setDisplayIndex(0);
+    }
+  };
 
   const handleTap = () => {
     restartTimer();
@@ -39,8 +58,6 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
   };
 
   // Card always uses top/left anchoring so transitions are smooth between states.
-  // Expanded: centered portrait at 85vh tall.
-  // Collapsed: bottom-right thumbnail.
   const cardStyle: React.CSSProperties = {
     position: "fixed",
     zIndex: 50,
@@ -79,34 +96,34 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
     transition: "opacity 0.35s ease, backdrop-filter 0.35s ease, -webkit-backdrop-filter 0.35s ease",
   };
 
-  const images = (
-    <>
-      {highlights.map((h, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={h.id}
-          src={h.image.replace("http:", "https:")}
-          alt={h.title}
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{
-            opacity: i === current % highlights.length ? 1 : 0,
-            transition: "opacity 0.7s ease",
-          }}
-        />
-      ))}
-      {highlights.length === 0 && (
-        <div className="w-full h-full bg-[#111] flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
-        </div>
-      )}
-    </>
-  );
-
   return (
     <>
       <div style={backdropStyle} onClick={handleTap} />
       <div style={cardStyle} onClick={handleTap}>
-        {images}
+        {/* Horizontal strip of slides */}
+        <div
+          style={{
+            display: "flex",
+            height: "100%",
+            transform: `translateX(-${displayIndex * 100}%)`,
+            transition: slideAnimate ? "transform 1s ease-in-out" : "none",
+          }}
+          onTransitionEnd={handleTransitionEnd}
+        >
+          {slides.length > 0 ? slides.map((h, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={h.image.replace("http:", "https:")}
+              alt={h.title}
+              style={{ flex: "0 0 100%", width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          )) : (
+            <div className="flex-none w-full h-full bg-[#111] flex items-center justify-center">
+              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
