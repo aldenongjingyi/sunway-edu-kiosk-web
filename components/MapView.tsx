@@ -89,11 +89,15 @@ export default function MapView({ destinationId, onClose }: Props) {
         data-url={DATA_URL}
         map-url={MAP_URL}
         default-floor="G"
+        route-mode="lift"
         enable-rotation=""
         level-selector=""
         desktop-render-scale="1500"
         mobile-render-scale="1200"
         you-are-here-node-id={kioskNodeId}
+        control-active-bg-color="#00226B"
+        map-marker-end-bg-color="#00226B"
+        map-marker-connector-bg-color="#00226B"
       />
     </div>
   );
