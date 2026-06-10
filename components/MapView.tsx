@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 
@@ -22,9 +22,17 @@ function ensureScript() {
   document.head.appendChild(s);
 }
 
+interface RouteInfo {
+  startFloor: string;
+  endFloor: string;
+  startPoint: { x: number; y: number };
+  endPoint: { x: number; y: number };
+}
+
 export default function MapView({ destinationId, onClose }: Props) {
   const { nodes } = useDataStore();
   const mapRef = useRef<HTMLElement>(null);
+  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
 
   useEffect(() => { ensureScript(); }, []);
 
@@ -120,6 +128,23 @@ export default function MapView({ destinationId, onClose }: Props) {
       });
     };
 
+    const routeFloorIndicators = () => {
+      map.addEventListener("route-found", (e: Event) => {
+        const d = (e as CustomEvent).detail;
+        const sf = d?.startNode?.level?.code as string | undefined;
+        const ef = d?.endNode?.level?.code as string | undefined;
+        if (sf && ef) {
+          setRouteInfo({
+            startFloor: sf,
+            endFloor: ef,
+            startPoint: { x: d.startNode.point.x, y: d.startNode.point.y },
+            endPoint: { x: d.endNode.point.x, y: d.endNode.point.y },
+          });
+        }
+      });
+      map.addEventListener("route-cleared", () => setRouteInfo(null));
+    };
+
     const panToContent = () => {
       const el = map as HTMLElement & {
         centerOn: (x: number, y: number, opts?: { animate?: boolean }) => void;
@@ -146,10 +171,13 @@ export default function MapView({ destinationId, onClose }: Props) {
       attachTooltips();
       enforceMinZoom();
       panToContent();
+      routeFloorIndicators();
     } else {
-      map.addEventListener("ready", () => { attachTooltips(); enforceMinZoom(); panToContent(); }, { once: true });
+      map.addEventListener("ready", () => { attachTooltips(); enforceMinZoom(); panToContent(); routeFloorIndicators(); }, { once: true });
     }
   }, []);
+
+  useEffect(() => { setRouteInfo(null); }, [destinationId]);
 
   useEffect(() => {
     const map = mapRef.current as (HTMLElement & {
@@ -182,6 +210,16 @@ export default function MapView({ destinationId, onClose }: Props) {
     ? (localStorage.getItem(KIOSK_NODE_KEY) ?? undefined)
     : undefined;
 
+  const jumpToFloor = (floorCode: string, point: { x: number; y: number }) => {
+    const el = mapRef.current as (HTMLElement & {
+      setFloor: (code: string) => void;
+      centerOn: (x: number, y: number, opts?: { animate?: boolean }) => void;
+    }) | null;
+    if (!el) return;
+    el.setFloor(floorCode);
+    el.centerOn(point.x, point.y, { animate: true });
+  };
+
   const content = (
     <div
       className="fixed inset-0 z-[60] bg-white flex flex-col slide-up"
@@ -202,6 +240,32 @@ export default function MapView({ destinationId, onClose }: Props) {
           </svg>
           <span className="text-[17px]">Back</span>
         </button>
+
+        {routeInfo && (
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={() => jumpToFloor(routeInfo.startFloor, routeInfo.startPoint)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[13px] font-medium"
+              style={{ backgroundColor: "var(--navy)" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="3"/>
+                <path d="M9 14l-2 6h2l1-3 2 2 1 3h2l-2-6 1-2h4v-2H9v2h2l-1 2z"/>
+              </svg>
+              <span>{routeInfo.startFloor}</span>
+            </button>
+            <button
+              onClick={() => jumpToFloor(routeInfo.endFloor, routeInfo.endPoint)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[13px] font-medium"
+              style={{ backgroundColor: "#007aff" }}
+            >
+              <svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+              <span>{routeInfo.endFloor}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <wayfinder-map

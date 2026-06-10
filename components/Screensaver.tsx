@@ -5,6 +5,7 @@ import { useDataStore } from "@/lib/store";
 interface Props {
   isExpanded: boolean;
   onTap: () => void;
+  isWorkingHours: boolean;
 }
 
 const SHADOW = "0 8px 32px rgba(0,0,0,0.35)";
@@ -16,7 +17,7 @@ const THUMB = "min(15vw, 160px)";
 // Min drag distance to trigger a slide change
 const SLIDE_THRESHOLD = 50;
 
-export default function Screensaver({ isExpanded, onTap }: Props) {
+export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props) {
   const highlights = useDataStore(s => s.highlights);
   const n = highlights.length;
 
@@ -147,6 +148,16 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
   const stripTranslate = slides.length > 0
     ? `calc(-${displayIndex * pct}% + ${dragOffset}px)`
     : "0px";
+
+  // Outside working hours: black fullscreen overlay, cannot be dismissed
+  if (!isWorkingHours) {
+    return (
+      <div
+        style={{ position: "fixed", inset: 0, zIndex: 50, background: "#000", touchAction: "none" }}
+        onPointerDown={e => e.stopPropagation()}
+      />
+    );
+  }
 
   return (
     <>

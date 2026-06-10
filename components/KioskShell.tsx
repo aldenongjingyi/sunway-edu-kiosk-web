@@ -13,7 +13,17 @@ import type { Category, Staff } from "@/lib/types";
 const IDLE_SECONDS = 20;
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
+const WORKING_START_KEY = "admin.working.start";
+const WORKING_END_KEY   = "admin.working.end";
 const TABS = ["Popular Searches", "Facilities / Offices", "Departments / Staffs"] as const;
+
+function checkWorkingHours(): boolean {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const start = parseInt(localStorage.getItem(WORKING_START_KEY) ?? "450");  // 07:30
+  const end   = parseInt(localStorage.getItem(WORKING_END_KEY)   ?? "1170"); // 19:30
+  return mins >= start && mins <= end;
+}
 
 interface FloorOption {
   levelId: number;
@@ -29,6 +39,7 @@ export default function KioskShell() {
   const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
   const [screensaverExpanded, setScreensaverExpanded] = useState(false);
+  const [withinWorkingHours, setWithinWorkingHours] = useState(true);
   const [showResults, setShowResults] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [mapDestinationId, setMapDestinationId] = useState<number | null>(null);
@@ -46,6 +57,14 @@ export default function KioskShell() {
       setScreensaverExpanded(true);
     });
   }, [loadData, loadStaff]);
+
+  // Working hours check — runs every minute
+  useEffect(() => {
+    const check = () => setWithinWorkingHours(checkWorkingHours());
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Reset idle timer
   const resetIdle = useCallback(() => {
@@ -73,6 +92,7 @@ export default function KioskShell() {
   }, [resetIdle]);
 
   const handleScreensaverTap = () => {
+    if (!withinWorkingHours) return; // outside hours: black screen can't be dismissed
     setScreensaverExpanded(prev => !prev);
     resetIdle();
   };
@@ -174,7 +194,7 @@ export default function KioskShell() {
     <div className="h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
 
       {/* Screensaver overlay */}
-      <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} />
+      <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} isWorkingHours={withinWorkingHours} />
 
       {/* Admin panel */}
       {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); setQuery(""); }} />}
