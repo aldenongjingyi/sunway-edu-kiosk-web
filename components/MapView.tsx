@@ -130,17 +130,16 @@ export default function MapView({ destinationId, onClose }: Props) {
 
     const routeFloorIndicators = () => {
       map.addEventListener("route-found", (e: Event) => {
-        const d = (e as CustomEvent).detail;
-        const sf = d?.startNode?.level?.code as string | undefined;
-        const ef = d?.endNode?.level?.code as string | undefined;
-        if (sf && ef) {
-          setRouteInfo({
-            startFloor: sf,
-            endFloor: ef,
-            startPoint: { x: d.startNode.point.x, y: d.startNode.point.y },
-            endPoint: { x: d.endNode.point.x, y: d.endNode.point.y },
-          });
-        }
+        try {
+          const d = (e as CustomEvent).detail;
+          const sf = d?.startNode?.level?.code as string | undefined;
+          const ef = d?.endNode?.level?.code as string | undefined;
+          const sp = d?.startNode?.point;
+          const ep = d?.endNode?.point;
+          if (sf && ef && sp && ep && isFinite(sp.x) && isFinite(sp.y) && isFinite(ep.x) && isFinite(ep.y)) {
+            setRouteInfo({ startFloor: sf, endFloor: ef, startPoint: { x: sp.x, y: sp.y }, endPoint: { x: ep.x, y: ep.y } });
+          }
+        } catch (_) {}
       });
       map.addEventListener("route-cleared", () => setRouteInfo(null));
     };
@@ -151,29 +150,30 @@ export default function MapView({ destinationId, onClose }: Props) {
       };
 
       map.addEventListener("floor-changed", (e: Event) => {
-        const floorCode = (e as CustomEvent).detail?.floor as string | undefined;
-        if (!floorCode) return;
+        try {
+          const floorCode = (e as CustomEvent).detail?.floor as string | undefined;
+          if (!floorCode) return;
 
-        const { nodes: currentNodes, levels } = useDataStore.getState();
-        const matchingLevel = Object.values(levels).find(l => l.code === floorCode);
-        if (!matchingLevel) return;
+          const { nodes: currentNodes, levels } = useDataStore.getState();
+          const matchingLevel = Object.values(levels).find(l => l.code === floorCode);
+          if (!matchingLevel) return;
 
-        const floorNodes = currentNodes.filter(n => n.level === matchingLevel.id);
-        if (!floorNodes.length) return;
+          const validNodes = currentNodes.filter(n => n.level === matchingLevel.id && isFinite(n.x) && isFinite(n.y));
+          if (!validNodes.length) return;
 
-        const cx = floorNodes.reduce((s, n) => s + n.x, 0) / floorNodes.length;
-        const cy = floorNodes.reduce((s, n) => s + n.y, 0) / floorNodes.length;
-        el.centerOn(cx, cy, { animate: false });
+          const cx = validNodes.reduce((s, n) => s + n.x, 0) / validNodes.length;
+          const cy = validNodes.reduce((s, n) => s + n.y, 0) / validNodes.length;
+          el.centerOn(cx, cy, { animate: false });
+        } catch (_) {}
       });
     };
 
+    const setup = () => { attachTooltips(); enforceMinZoom(); panToContent(); routeFloorIndicators(); };
+
     if ((map as HTMLElement & { isInitialized?: boolean }).isInitialized) {
-      attachTooltips();
-      enforceMinZoom();
-      panToContent();
-      routeFloorIndicators();
+      setup();
     } else {
-      map.addEventListener("ready", () => { attachTooltips(); enforceMinZoom(); panToContent(); routeFloorIndicators(); }, { once: true });
+      map.addEventListener("ready", setup, { once: true });
     }
   }, []);
 
