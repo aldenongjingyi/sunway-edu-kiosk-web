@@ -148,12 +148,14 @@ export default function MapView({ destinationId, onClose }: Props) {
           const ep = d?.endNode?.point;
           if (sf && ef && sp && ep && isFinite(sp.x) && isFinite(sp.y) && isFinite(ep.x) && isFinite(ep.y)) {
             setRouteInfo({ startFloor: sf, endFloor: ef, startPoint: { x: sp.x, y: sp.y }, endPoint: { x: ep.x, y: ep.y } });
-            // Auto-zoom to destination floor
-            try {
-              const el = map as HTMLElement & { setFloor: (code: string) => void; centerOn: (x: number, y: number, opts?: { animate?: boolean }) => void };
-              el.setFloor(ef);
-              el.centerOn(ep.x, ep.y, { animate: true });
-            } catch (_) {}
+            const epx = ep.x, epy = ep.y;
+            setTimeout(() => {
+              try {
+                const el = map as HTMLElement & { setFloor: (c: string) => void; centerOn: (x: number, y: number, o?: object) => void };
+                el.setFloor(ef);
+                el.centerOn(epx, epy, { animate: true, scale: 3 });
+              } catch (_) {}
+            }, 0);
           }
         } catch (_) {}
       });
@@ -177,7 +179,7 @@ export default function MapView({ destinationId, onClose }: Props) {
       navigateTo: (opts: { from: number; to: number }) => void;
       focusLocation: (id: number) => void;
       setFloor: (code: string) => void;
-      centerOn: (x: number, y: number, opts?: { animate?: boolean }) => void;
+      centerOn: (x: number, y: number, opts?: { animate?: boolean; scale?: number }) => void;
     }) | null;
     if (!map || !destinationId) return;
 
@@ -186,27 +188,11 @@ export default function MapView({ destinationId, onClose }: Props) {
       if (rawNodeId) {
         const kioskNode = nodes.find(n => n.id === Number(rawNodeId));
         if (kioskNode?.location) {
-          map.navigateTo({ from: kioskNode.location, to: destinationId });
-          // route-found event will handle auto-zoom
-          return;
+          const result = (map as typeof map & { navigateTo: (o: object) => { success: boolean } }).navigateTo({ from: kioskNode.location, to: destinationId });
+          if (result?.success) return;
         }
       }
-      // No kiosk node — focusLocation and manually zoom to destination floor
       map.focusLocation(destinationId);
-      try {
-        const destNodes = nodes.filter(n => n.location === destinationId && isFinite(n.x) && isFinite(n.y));
-        if (destNodes.length) {
-          const level = levels[destNodes[0].level];
-          if (level?.code) {
-            const cx = destNodes.reduce((s, n) => s + n.x, 0) / destNodes.length;
-            const cy = destNodes.reduce((s, n) => s + n.y, 0) / destNodes.length;
-            if (isFinite(cx) && isFinite(cy)) {
-              map.setFloor(level.code);
-              map.centerOn(cx, cy, { animate: true });
-            }
-          }
-        }
-      } catch (_) {}
     };
 
     if (map.isInitialized) {
@@ -214,7 +200,7 @@ export default function MapView({ destinationId, onClose }: Props) {
     } else {
       map.addEventListener("ready", navigate, { once: true });
     }
-  }, [destinationId, nodes, levels]);
+  }, [destinationId, nodes]);
 
   // Destination floor — pure derivation from store + routeInfo, no event listeners.
   // When route exists, use routeInfo end floor. Otherwise compute from nodes/levels.
@@ -237,17 +223,20 @@ export default function MapView({ destinationId, onClose }: Props) {
   const jumpToFloor = (floorCode: string, point: { x: number; y: number }) => {
     const el = mapRef.current as (HTMLElement & {
       setFloor: (code: string) => void;
-      centerOn: (x: number, y: number, opts?: { animate?: boolean }) => void;
+      centerOn: (x: number, y: number, opts?: { animate?: boolean; scale?: number }) => void;
     }) | null;
     if (!el) return;
     el.setFloor(floorCode);
-    el.centerOn(point.x, point.y, { animate: true });
+    el.centerOn(point.x, point.y, { animate: true, scale: 3 });
   };
 
   const content = (
     <div
-      className="fixed inset-0 z-[60] bg-white flex flex-col slide-up"
-      style={{ display: destinationId ? "flex" : "none" }}
+      className="fixed inset-0 z-[60] bg-white flex flex-col"
+      style={{
+        visibility: destinationId ? "visible" : "hidden",
+        pointerEvents: destinationId ? "auto" : "none",
+      }}
     >
       <div
         className="flex items-center px-4 flex-shrink-0"
