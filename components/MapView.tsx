@@ -116,6 +116,12 @@ export default function MapView({ destinationId, onClose }: Props) {
       }
 
       try {
+        const scrollActiveLevel = () => {
+          try {
+            const btn = shadow?.querySelector<HTMLElement>(".wayfinder-level-button[data-active='true']");
+            btn?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          } catch (_) {}
+        };
 
         shadow.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach(btn => {
           const action = btn.dataset.action ?? "";
@@ -123,6 +129,11 @@ export default function MapView({ destinationId, onClose }: Props) {
           if (!label) return;
 
           btn.title = label;
+
+          // Scroll level selector to active floor after locate buttons are tapped
+          if (action === "locate-focus" || action === "locate-here" || action === "locate-start") {
+            btn.addEventListener("click", () => setTimeout(scrollActiveLevel, 100), { passive: true });
+          }
 
           let timer: ReturnType<typeof setTimeout> | null = null;
           let tip: HTMLDivElement | null = null;
@@ -171,7 +182,17 @@ export default function MapView({ destinationId, onClose }: Props) {
       map.addEventListener("route-cleared", () => setRouteInfo(null));
     };
 
-    const setup = () => { attachTooltips(); routeFloorIndicators(); };
+    const autoScrollLevel = () => {
+      map.addEventListener("floor-changed", () => {
+        try {
+          const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
+          const btn = shadow?.querySelector<HTMLElement>(".wayfinder-level-button[data-active='true']");
+          btn?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } catch (_) {}
+      });
+    };
+
+    const setup = () => { attachTooltips(); routeFloorIndicators(); autoScrollLevel(); };
 
     if ((map as HTMLElement & { isInitialized?: boolean }).isInitialized) {
       setup();
@@ -192,16 +213,30 @@ export default function MapView({ destinationId, onClose }: Props) {
     }) | null;
     if (!map || !destinationId) return;
 
+    const scrollActiveLevel = () => {
+      try {
+        const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
+        const btn = shadow?.querySelector<HTMLElement>(".wayfinder-level-button[data-active='true']");
+        btn?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } catch (_) {}
+    };
+
     const navigate = () => {
       const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
       if (rawNodeId) {
         const kioskNode = nodes.find(n => n.id === Number(rawNodeId));
         if (kioskNode?.location) {
           const result = (map as typeof map & { navigateTo: (o: object) => { success: boolean } }).navigateTo({ from: kioskNode.location, to: destinationId });
-          if (result?.success) return;
+          if (result?.success) {
+            // floor-changed handles scroll when floor changes; fall back for same-floor case
+            setTimeout(scrollActiveLevel, 100);
+            return;
+          }
         }
       }
       map.focusLocation(destinationId);
+      // focusLocation only calls setFloor when floor changes, so always scroll after
+      setTimeout(scrollActiveLevel, 100);
     };
 
     if (map.isInitialized) {
