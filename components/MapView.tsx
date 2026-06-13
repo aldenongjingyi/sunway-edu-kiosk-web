@@ -89,6 +89,15 @@ export default function MapView({ destinationId, onClose }: Props) {
           .wayfinder-locate-button img {
             filter: brightness(0) !important;
           }
+          /* Make level selector fill the control rail height so overflow-y:auto has a definite
+             size to scroll within. The control rail already has top+bottom absolute positioning
+             giving it a definite height; align-self:stretch inherits that height.
+             The wayfinder clears max-height on desktop (>768px), so we can't rely on it. */
+          .wayfinder-level-selector {
+            align-self: stretch !important;
+            max-height: none !important;
+            overflow-y: auto !important;
+          }
         `;
 
         try {
