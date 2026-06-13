@@ -18,11 +18,7 @@ const WORKING_END_KEY   = "admin.working.end";
 const TABS = ["Popular Searches", "Facilities / Offices", "Departments / Staffs"] as const;
 
 function checkWorkingHours(): boolean {
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const start = parseInt(localStorage.getItem(WORKING_START_KEY) ?? "450");  // 07:30
-  const end   = parseInt(localStorage.getItem(WORKING_END_KEY)   ?? "1170"); // 19:30
-  return mins >= start && mins <= end;
+  return true; // disabled — always treat as working hours
 }
 
 interface FloorOption {
