@@ -12,10 +12,9 @@ interface Props {
 }
 
 export default function SearchResults({ query, filterCategory, filterDepartment, onLocationSelect, onStaffSelect }: Props) {
-  const { locations, staffs, categories } = useDataStore();
+  const { locations, staffs } = useDataStore();
   const q = query.toLowerCase().trim();
 
-  // Filter locations
   const matchedLocations = locations.filter(loc => {
     if (filterCategory) return loc.categories.includes(filterCategory);
     if (!q) return false;
@@ -26,7 +25,6 @@ export default function SearchResults({ query, filterCategory, filterDepartment,
     );
   });
 
-  // Filter staff
   const matchedStaff = staffs.filter(s => {
     if (filterDepartment) return s.department === filterDepartment;
     if (!q) return false;
@@ -39,21 +37,18 @@ export default function SearchResults({ query, filterCategory, filterDepartment,
   });
 
   const isEmpty = matchedLocations.length === 0 && matchedStaff.length === 0;
+  const hasBoth = matchedLocations.length > 0 && matchedStaff.length > 0;
 
   return (
-    <div className="flex-1 ios-scroll slide-up">
-      {/* Locations section */}
+    <div className="flex-1 ios-scroll slide-up" style={{ background: "var(--panel-bg)" }}>
+
       {matchedLocations.length > 0 && (
         <div>
-          {matchedLocations.length > 0 && matchedStaff.length > 0 && (
-            <div className="px-4 pt-3 pb-1">
-              <span className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide">Facilities &amp; Offices</span>
-            </div>
-          )}
+          {hasBoth && <div className="v3-results-hdr">Facilities &amp; Offices</div>}
           {matchedLocations.map((loc, i) => (
             <div key={loc.id}>
-              <div className="flex items-start gap-3 px-4 py-3 row-press" onClick={() => onLocationSelect(loc.id)}>
-                <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 bg-[#f2f2f7] flex items-center justify-center">
+              <div className="v3-loc-row" onClick={() => onLocationSelect(loc.id)}>
+                <div className="v3-loc-thumb">
                   {loc.images[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={loc.images[0]} alt={loc.title} className="w-full h-full object-cover" />
@@ -65,12 +60,12 @@ export default function SearchResults({ query, filterCategory, filterDepartment,
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-[17px] text-black leading-snug">{loc.title}</p>
-                  <p className="text-[14px] text-[#3c3c43] mt-0.5">
+                  <p className="v3-loc-title">{loc.title}</p>
+                  <p className="v3-loc-sub">
                     {loc.levelTitles?.join(" / ")} &bull; {(loc.categories_ ?? []).map(c => c.title).join(" / ")}
                   </p>
                 </div>
-                <div className="chevron mt-1" />
+                <div className="chevron" />
               </div>
               {i < matchedLocations.length - 1 && <div className="divider" />}
             </div>
@@ -78,14 +73,9 @@ export default function SearchResults({ query, filterCategory, filterDepartment,
         </div>
       )}
 
-      {/* Staff section */}
       {matchedStaff.length > 0 && (
         <div>
-          {matchedLocations.length > 0 && matchedStaff.length > 0 && (
-            <div className="px-4 pt-4 pb-1">
-              <span className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide">Staff</span>
-            </div>
-          )}
+          {hasBoth && <div className="v3-results-hdr">Staff</div>}
           {matchedStaff.map(s => (
             <StaffRow key={`${s.fullName}-${s.ext}`} staff={s} onSelect={onStaffSelect} />
           ))}
@@ -93,12 +83,12 @@ export default function SearchResults({ query, filterCategory, filterDepartment,
       )}
 
       {isEmpty && q.length > 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-[#8e8e93]">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="mb-3 opacity-40">
+        <div className="flex flex-col items-center justify-center py-16" style={{ color: "#aaaaaa" }}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="mb-3 opacity-30">
             <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5"/>
             <path d="m16.5 16.5 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
-          <p className="text-[17px]">No results for &ldquo;{query}&rdquo;</p>
+          <p style={{ fontSize: 16 }}>No results for &ldquo;{query}&rdquo;</p>
         </div>
       )}
     </div>
