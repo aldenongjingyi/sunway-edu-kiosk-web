@@ -12,19 +12,19 @@ export default function DepartmentsTab({ onSelect }: { onSelect: (dept: string) 
     : [];
 
   return (
-    <div className="flex-1 ios-scroll">
+    <div className="v2-dept-section">
       {!staffLoaded && (
         <div className="flex items-center justify-center h-32">
-          <div className="w-8 h-8 border-2 border-[#00226B] border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 rounded-full animate-spin" style={{ border: "2px solid var(--navy)", borderTopColor: "transparent" }} />
         </div>
       )}
       {departments.map((dept, i) => (
-        <div key={dept} className="row-press" onClick={() => onSelect(dept)}>
-          <div className="flex items-center px-4 py-3.5">
-            <span className="flex-1 text-[17px] text-black">{dept}</span>
+        <div key={dept}>
+          <div className="v2-dept-row" onClick={() => onSelect(dept)}>
+            <span className="v2-dept-name">{dept}</span>
             <div className="chevron" />
           </div>
-          {i < departments.length - 1 && <div className="divider-full" />}
+          {i < departments.length - 1 && <div className="v2-dept-divider" />}
         </div>
       ))}
     </div>

@@ -47,7 +47,6 @@ export default function KioskShell() {
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load data on mount, expand screensaver once highlights are ready
   useEffect(() => {
     loadData().then(() => {
       loadStaff();
@@ -55,7 +54,6 @@ export default function KioskShell() {
     });
   }, [loadData, loadStaff]);
 
-  // Working hours check — runs every minute
   useEffect(() => {
     const check = () => setWithinWorkingHours(checkWorkingHours());
     check();
@@ -63,7 +61,6 @@ export default function KioskShell() {
     return () => clearInterval(interval);
   }, []);
 
-  // Reset idle timer
   const resetIdle = useCallback(() => {
     if (idleRef.current) clearTimeout(idleRef.current);
     idleRef.current = setTimeout(() => {
@@ -73,14 +70,13 @@ export default function KioskShell() {
       setFilterDepartment(null);
       setShowResults(false);
       setTab(0);
-      setMapDestinationId(null); // close map on idle
+      setMapDestinationId(null);
       setNotProvisionedAlert(false);
       setFloorPicker(null);
       inputRef.current?.blur();
     }, IDLE_SECONDS * 1000);
   }, []);
 
-  // Track any user interaction
   useEffect(() => {
     const events = ["touchstart", "mousedown", "keydown", "mousemove"];
     events.forEach(e => window.addEventListener(e, resetIdle, { passive: true }));
@@ -89,7 +85,7 @@ export default function KioskShell() {
   }, [resetIdle]);
 
   const handleScreensaverTap = () => {
-    if (!withinWorkingHours) return; // outside hours: black screen can't be dismissed
+    if (!withinWorkingHours) return;
     setScreensaverExpanded(prev => !prev);
     resetIdle();
   };
@@ -141,14 +137,11 @@ export default function KioskShell() {
   };
 
   const openMap = (locationId: number) => {
-    // Check kiosk is provisioned
     const rawNodeId = typeof window !== "undefined" ? localStorage.getItem(KIOSK_NODE_KEY) : null;
     if (!rawNodeId) {
       setNotProvisionedAlert(true);
       return;
     }
-
-    // Find unique floors for this location
     const locationNodes = nodes.filter(n => n.location === locationId);
     const seenLevels = new Set<number>();
     const floors: FloorOption[] = [];
@@ -159,7 +152,6 @@ export default function KioskShell() {
         if (level) floors.push({ levelId: node.level, title: level.title, label: level.label });
       }
     }
-
     if (floors.length >= 2) {
       setFloorPicker({ locationId, floors });
     } else {
@@ -187,6 +179,8 @@ export default function KioskShell() {
     handleClear();
   };
 
+  const TAB_LABELS = ["Popular", "Facilities", "Departments", "Events"];
+
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
 
@@ -196,29 +190,19 @@ export default function KioskShell() {
       {/* Admin panel */}
       {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); setQuery(""); }} />}
 
-      {/* Map overlay — kept mounted once shown so it doesn't re-fetch on every open */}
+      {/* Map overlay */}
       {mapMounted && <MapView destinationId={mapDestinationId} onClose={handleMapClose} />}
 
-      {/* "Not provisioned" alert */}
+      {/* Not provisioned alert */}
       {notProvisionedAlert && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center"
-          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-          onClick={() => setNotProvisionedAlert(false)}
-        >
+        <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }} onClick={() => setNotProvisionedAlert(false)}>
           <div className="bg-white rounded-2xl max-w-xs w-full mx-6 overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="px-5 pt-5 pb-4 text-center">
               <p className="text-[17px] font-semibold text-black mb-2">Oops</p>
               <p className="text-[13px] text-[#3c3c43]">This Kiosk has not been provisioned. Please contact Concierge.</p>
             </div>
             <div style={{ borderTop: "0.5px solid #e5e5ea" }}>
-              <button
-                className="w-full py-3 text-[17px] font-medium"
-                style={{ color: "#007aff" }}
-                onClick={() => setNotProvisionedAlert(false)}
-              >
-                Ok
-              </button>
+              <button className="w-full py-3 text-[17px] font-medium" style={{ color: "#007aff" }} onClick={() => setNotProvisionedAlert(false)}>Ok</button>
             </div>
           </div>
         </div>
@@ -226,102 +210,87 @@ export default function KioskShell() {
 
       {/* Floor picker */}
       {floorPicker && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center"
-          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-          onClick={() => setFloorPicker(null)}
-        >
+        <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }} onClick={() => setFloorPicker(null)}>
           <div className="bg-white rounded-2xl max-w-xs w-full mx-6 overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="px-5 pt-5 pb-3 text-center">
               <p className="text-[17px] font-semibold text-black">To which floor?</p>
             </div>
-            {floorPicker.floors.map((floor, i) => (
+            {floorPicker.floors.map((floor) => (
               <div key={floor.levelId}>
                 <div style={{ borderTop: "0.5px solid #e5e5ea" }} />
-                <button
-                  className="w-full py-3 text-[17px]"
-                  style={{ color: "#007aff" }}
-                  onClick={() => {
-                    setMapDestinationId(floorPicker.locationId);
-                    setMapMounted(true);
-                    setFloorPicker(null);
-                    resetIdle();
-                  }}
-                >
+                <button className="w-full py-3 text-[17px]" style={{ color: "#007aff" }}
+                  onClick={() => { setMapDestinationId(floorPicker.locationId); setMapMounted(true); setFloorPicker(null); resetIdle(); }}>
                   {floor.title} ({floor.label})
                 </button>
               </div>
             ))}
             <div style={{ borderTop: "0.5px solid #e5e5ea" }} />
-            <button
-              className="w-full py-3 text-[17px] font-medium"
-              style={{ color: "#ff3b30" }}
-              onClick={() => setFloorPicker(null)}
-            >
-              Cancel
-            </button>
+            <button className="w-full py-3 text-[17px] font-medium" style={{ color: "#ff3b30" }} onClick={() => setFloorPicker(null)}>Cancel</button>
           </div>
         </div>
       )}
 
-      {/* Search bar */}
-      <div className="flex items-center gap-2 px-4 pt-3 pb-2 flex-shrink-0">
-        <input
-          ref={inputRef}
-          className="search-bar"
-          placeholder="Tap Here To Search"
-          value={query}
-          onChange={e => handleQueryChange(e.target.value)}
-          onFocus={resetIdle}
-        />
-        <button
-          onClick={handleClear}
-          className="flex-shrink-0 px-4 py-2 rounded-lg text-white text-[15px] font-medium"
-          style={{ backgroundColor: "var(--navy)" }}
-        >
-          Clear
-        </button>
+      {/* ── V2 Slim header ── */}
+      <div className="v2-header">
+        <div>
+          <p className="v2-wordmark">Sunway University</p>
+          <p className="v2-wordmark-sub">Campus Directory</p>
+        </div>
+        {!showResults && tab === 0 && (
+          <p style={{ fontSize: 11, color: "#aeaeb2" }}>v1.0 #14</p>
+        )}
       </div>
 
-      {/* Segment control — hidden when showing results */}
-      {!showResults && (
-        <div className="px-4 pb-3 flex-shrink-0">
-          <div className="segment-control">
-            {TABS.map((t, i) => (
-              <button
-                key={t}
-                className={`segment-btn ${tab === i ? "active" : ""}`}
-                onClick={() => handleTabChange(i)}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+      {/* ── V2 Hero search bar ── */}
+      <div className="v2-search-zone">
+        <div className="v2-search-wrap">
+          <svg className="v2-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8"/>
+            <path d="m16.5 16.5 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+          <input
+            ref={inputRef}
+            className="v2-search"
+            placeholder="Search facilities, staff, departments…"
+            value={query}
+            onChange={e => handleQueryChange(e.target.value)}
+            onFocus={resetIdle}
+          />
+          {query.length > 0 && (
+            <button onClick={handleClear} className="v2-clear">Clear</button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Content area */}
-      {showResults ? (
-        <SearchResults
-          query={query}
-          filterCategory={filterCategory}
-          filterDepartment={filterDepartment}
-          onLocationSelect={handleLocationSelect}
-          onStaffSelect={handleStaffSelect}
-        />
-      ) : (
-        <>
-          {tab === 0 && <PopularTab onSelect={handlePopularSelect} />}
-          {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} />}
-          {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} />}
-          {tab === 3 && <EventsTab />}
-        </>
-      )}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {showResults ? (
+          <SearchResults
+            query={query}
+            filterCategory={filterCategory}
+            filterDepartment={filterDepartment}
+            onLocationSelect={handleLocationSelect}
+            onStaffSelect={handleStaffSelect}
+          />
+        ) : (
+          <>
+            {tab === 0 && <PopularTab onSelect={handlePopularSelect} />}
+            {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} />}
+            {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} />}
+            {tab === 3 && <EventsTab />}
+          </>
+        )}
+      </div>
 
-      {/* Footer version info */}
-      {!showResults && tab === 0 && (
-        <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #14</p>
+      {/* ── V2 Bottom tab bar ── */}
+      {!showResults && (
+        <div className="v2-tabbar">
+          {TAB_LABELS.map((label, i) => (
+            <button key={label} className={`v2-tab-btn${tab === i ? " active" : ""}`} onClick={() => handleTabChange(i)}>
+              <div className="v2-tab-dot" />
+              <span className="v2-tab-label">{label}</span>
+            </button>
+          ))}
         </div>
       )}
     </div>

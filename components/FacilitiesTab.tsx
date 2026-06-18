@@ -14,20 +14,13 @@ export default function FacilitiesTab({ onSelect }: { onSelect: (c: Category) =>
     <div className="flex-1 ios-scroll">
       {!loaded && (
         <div className="flex items-center justify-center h-32">
-          <div className="w-8 h-8 border-2 border-[#00226B] border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 rounded-full animate-spin" style={{ border: "2px solid var(--navy)", borderTopColor: "transparent" }} />
         </div>
       )}
-      <div className="grid grid-cols-5 gap-3 p-4">
+      <div className="v2-cat-grid">
         {visible.map(cat => (
-          <button
-            key={cat.id}
-            className="card-press flex flex-col items-center gap-2"
-            onClick={() => onSelect(cat)}
-          >
-            <div
-              className="w-full aspect-square rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: "#f2f2f7" }}
-            >
+          <button key={cat.id} className="v2-cat-tile" onClick={() => onSelect(cat)}>
+            <div className="v2-cat-icon">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={cat.image}
@@ -44,7 +37,7 @@ export default function FacilitiesTab({ onSelect }: { onSelect: (c: Category) =>
                 }}
               />
             </div>
-            <span className="text-[13px] text-black text-center leading-tight">{cat.title}</span>
+            <span className="v2-cat-label">{cat.title}</span>
           </button>
         ))}
       </div>
