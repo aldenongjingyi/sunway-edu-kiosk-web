@@ -39,10 +39,9 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   useEffect(() => {
     const update = () => {
       const vv = window.visualViewport;
-      setVp({
-        w: vv ? Math.round(vv.width) : window.innerWidth,
-        h: vv ? Math.round(vv.height) : window.innerHeight,
-      });
+      const w = vv ? Math.round(vv.width) : window.innerWidth;
+      const h = vv ? Math.round(vv.height) : window.innerHeight;
+      setVp({ w, h });
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
