@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 
@@ -22,19 +22,11 @@ function ensureScript() {
   document.head.appendChild(s);
 }
 
-interface RouteInfo {
-  startFloor: string;
-  endFloor: string;
-  startPoint: { x: number; y: number };
-  endPoint: { x: number; y: number };
-}
-
 export default function MapView({ destinationId, onClose }: Props) {
-  const { nodes, levels } = useDataStore();
+  const { nodes } = useDataStore();
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   const mapRef = useRef<HTMLElement>(null);
-  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
 
   useEffect(() => { ensureScript(); }, []);
 
@@ -86,6 +78,10 @@ export default function MapView({ destinationId, onClose }: Props) {
           .wayfinder-locate-button {
             border-radius: 50% !important;
             background-color: #ffffff !important;
+          }
+          /* Hide "You Are Here" locate button — kiosk is fixed, redundant with walker indicator */
+          button[data-action="locate-here"] {
+            display: none !important;
           }
           /* Force icon to black so it's visible on white background */
           .wayfinder-locate-button img {
@@ -169,7 +165,6 @@ export default function MapView({ destinationId, onClose }: Props) {
           const sp = d?.startNode?.point;
           const ep = d?.endNode?.point;
           if (sf && ef && sp && ep && isFinite(sp.x) && isFinite(sp.y) && isFinite(ep.x) && isFinite(ep.y)) {
-            setRouteInfo({ startFloor: sf, endFloor: ef, startPoint: { x: sp.x, y: sp.y }, endPoint: { x: ep.x, y: ep.y } });
             const epx = ep.x, epy = ep.y;
             setTimeout(() => {
               try {
@@ -181,7 +176,6 @@ export default function MapView({ destinationId, onClose }: Props) {
           }
         } catch (_) {}
       });
-      map.addEventListener("route-cleared", () => setRouteInfo(null));
     };
 
     const autoScrollLevel = () => {
@@ -203,7 +197,6 @@ export default function MapView({ destinationId, onClose }: Props) {
     }
   }, []);
 
-  useEffect(() => { setRouteInfo(null); }, [destinationId]);
 
   useEffect(() => {
     const map = mapRef.current as (HTMLElement & {
@@ -252,33 +245,10 @@ export default function MapView({ destinationId, onClose }: Props) {
     }
   }, [destinationId]); // nodesRef used instead of nodes to avoid double-navigation
 
-  // Destination floor — pure derivation from store + routeInfo, no event listeners.
-  // When route exists, use routeInfo end floor. Otherwise compute from nodes/levels.
-  const destFloorInfo = useMemo(() => {
-    if (!destinationId) return null;
-    if (routeInfo) return { floor: routeInfo.endFloor, point: routeInfo.endPoint };
-    const destNodes = nodes.filter(n => n.location === destinationId && isFinite(n.x) && isFinite(n.y));
-    if (!destNodes.length) return null;
-    const level = levels[destNodes[0].level];
-    if (!level?.code) return null;
-    const cx = destNodes.reduce((s, n) => s + n.x, 0) / destNodes.length;
-    const cy = destNodes.reduce((s, n) => s + n.y, 0) / destNodes.length;
-    return { floor: level.code, point: { x: cx, y: cy } };
-  }, [destinationId, nodes, levels, routeInfo]);
-
   const kioskNodeId = typeof window !== "undefined"
     ? (localStorage.getItem(KIOSK_NODE_KEY) ?? undefined)
     : undefined;
 
-  const jumpToFloor = (floorCode: string, point: { x: number; y: number }) => {
-    const el = mapRef.current as (HTMLElement & {
-      setFloor: (code: string) => void;
-      centerOn: (x: number, y: number, opts?: { animate?: boolean; scale?: number }) => void;
-    }) | null;
-    if (!el) return;
-    el.setFloor(floorCode);
-    el.centerOn(point.x, point.y, { animate: true, scale: 3 });
-  };
 
   const content = (
     <div
@@ -304,46 +274,6 @@ export default function MapView({ destinationId, onClose }: Props) {
           <span className="text-[17px]">Back</span>
         </button>
 
-        {/* Route floor jump buttons — shown when a route is calculated */}
-        {routeInfo && (
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={() => jumpToFloor(routeInfo.startFloor, routeInfo.startPoint)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[13px] font-medium"
-              style={{ backgroundColor: "var(--navy)" }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="3"/>
-                <path d="M9 14l-2 6h2l1-3 2 2 1 3h2l-2-6 1-2h4v-2H9v2h2l-1 2z"/>
-              </svg>
-              <span>{routeInfo.startFloor}</span>
-            </button>
-            <button
-              onClick={() => jumpToFloor(routeInfo.endFloor, routeInfo.endPoint)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[13px] font-medium"
-              style={{ backgroundColor: "#007aff" }}
-            >
-              <svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              <span>{routeInfo.endFloor}</span>
-            </button>
-          </div>
-        )}
-
-        {/* Destination floor pin — shown when no route (focusLocation only) */}
-        {!routeInfo && destFloorInfo && (
-          <button
-            onClick={() => jumpToFloor(destFloorInfo.floor, destFloorInfo.point)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[13px] font-medium ml-auto"
-            style={{ backgroundColor: "#007aff" }}
-          >
-            <svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-            </svg>
-            <span>{destFloorInfo.floor}</span>
-          </button>
-        )}
       </div>
 
       <wayfinder-map
