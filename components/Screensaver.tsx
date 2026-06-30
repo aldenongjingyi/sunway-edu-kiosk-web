@@ -31,6 +31,9 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const [slideAnimate, setSlideAnimate] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Use visualViewport (actual visible area) to avoid layout-viewport quirks in Android WebView
   const [vp, setVp] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -173,6 +176,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const stripTranslate = slides.length > 0
     ? `calc(-${displayIndex * pct}% + ${dragOffset}px)`
     : "0px";
+
+  if (!mounted) return null;
 
   // Outside working hours: black fullscreen overlay, cannot be dismissed
   if (!isWorkingHours) {
