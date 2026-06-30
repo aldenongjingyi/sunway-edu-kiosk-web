@@ -30,6 +30,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const [displayIndex, setDisplayIndex] = useState(1);
   const [slideAnimate, setSlideAnimate] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+  const [imageRatio, setImageRatio] = useState(1.35); // height/width, updated from first loaded image
+  const ratioSetRef = useRef(false);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -140,12 +142,12 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     transition: `top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
     ...(vp.w > 0
       ? (isExpanded
-        ? {
-            top:    `${Math.round(vp.h * 0.05)}px`,
-            left:   `${Math.round(vp.w * 0.05)}px`,
-            width:  `${Math.round(vp.w * 0.90)}px`,
-            height: `${Math.round(vp.h * 0.90)}px`,
-          }
+        ? (() => {
+            const w = Math.round(vp.w * 0.90);
+            const h = Math.round(w * imageRatio); // derived from actual image natural dimensions
+            const top = Math.round((vp.h - h) / 2);
+            return { top: `${top}px`, left: `${Math.round(vp.w * 0.05)}px`, width: `${w}px`, height: `${h}px` };
+          })()
         : {
             top:    `${vp.h - THUMB_PX * 4 / 3 - 20}px`,
             left:   `${vp.w - THUMB_PX - 20}px`,
@@ -217,6 +219,15 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
               src={h.image.replace("http:", "https:")}
               alt={h.title}
               draggable={false}
+              onLoad={(e) => {
+                if (!ratioSetRef.current) {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth > 0) {
+                    ratioSetRef.current = true;
+                    setImageRatio(img.naturalHeight / img.naturalWidth);
+                  }
+                }
+              }}
               style={{
                 width: `${pct}%`,
                 height: "100%",
