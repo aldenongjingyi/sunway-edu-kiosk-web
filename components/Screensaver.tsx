@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 
 interface Props {
@@ -30,6 +31,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const [displayIndex, setDisplayIndex] = useState(1);
   const [slideAnimate, setSlideAnimate] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dragStartX = useRef<number | null>(null);
@@ -115,13 +117,14 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     boxShadow: SHADOW,
     cursor: "grab",
     touchAction: "none",
+    background: "#111",
     transition: `top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
     ...(isExpanded
       ? {
-          top: "7.5vh",
-          left: "calc(50vw - 85vh * 3 / 8)",
-          width: "calc(85vh * 3 / 4)",
-          height: "85vh",
+          top: "5vh",
+          left: "5vw",
+          width: "90vw",
+          height: "90vh",
         }
       : {
           top: `calc(100vh - ${THUMB} * 4 / 3 - 20px)`,
@@ -136,7 +139,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     inset: 0,
     zIndex: 49,
     pointerEvents: isExpanded ? "auto" : "none",
-    background: "rgba(0,0,0,0.04)",
+    background: "rgba(0,0,0,0.55)",
     backdropFilter: isExpanded ? "blur(3px)" : "blur(0px)",
     WebkitBackdropFilter: isExpanded ? "blur(3px)" : "blur(0px)",
     opacity: isExpanded ? 1 : 0,
@@ -151,15 +154,16 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
 
   // Outside working hours: black fullscreen overlay, cannot be dismissed
   if (!isWorkingHours) {
-    return (
+    return createPortal(
       <div
         style={{ position: "fixed", inset: 0, zIndex: 50, background: "#000", touchAction: "none" }}
         onPointerDown={e => e.stopPropagation()}
-      />
+      />,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <>
       <div style={backdropStyle} onClick={() => { restartTimer(); onTap(); }} />
       <div
@@ -173,7 +177,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         <div
           style={{
             display: "flex",
-            width: `${slides.length * 100}%`,
+            width: `${slides.length > 0 ? slides.length * 100 : 100}%`,
             height: "100%",
             transform: `translateX(${stripTranslate})`,
             transition: slideAnimate ? "transform 0.5s ease-in-out" : "none",
@@ -190,19 +194,20 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
               style={{
                 width: `${pct}%`,
                 height: "100%",
-                objectFit: "cover",
+                objectFit: "contain",
                 flexShrink: 0,
                 userSelect: "none",
                 pointerEvents: "none",
               }}
             />
           )) : (
-            <div className="h-full bg-[#111] flex items-center justify-center" style={{ width: "100%" }}>
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#111" }}>
               <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
             </div>
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
