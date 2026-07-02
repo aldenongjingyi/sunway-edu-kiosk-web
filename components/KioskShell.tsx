@@ -4,6 +4,7 @@ import { useDataStore } from "@/lib/store";
 import PopularTab from "./PopularTab";
 import FacilitiesTab from "./FacilitiesTab";
 import DepartmentsTab from "./DepartmentsTab";
+import EventsTab from "./EventsTab";
 import SearchResults from "./SearchResults";
 import Screensaver from "./Screensaver";
 import AdminPanel from "./AdminPanel";
@@ -15,7 +16,7 @@ const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 const WORKING_START_KEY = "admin.working.start";
 const WORKING_END_KEY   = "admin.working.end";
-const TABS = ["Popular Searches", "Facilities / Offices", "Departments / Staffs"] as const;
+const TABS = ["Popular Searches", "Facilities / Offices", "Departments / Staffs", "Events"] as const;
 
 function checkWorkingHours(): boolean {
   return true; // disabled — always treat as working hours
@@ -313,6 +314,7 @@ export default function KioskShell() {
           {tab === 0 && <PopularTab onSelect={handlePopularSelect} />}
           {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} />}
           {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} />}
+          {tab === 3 && <EventsTab />}
         </>
       )}
 
