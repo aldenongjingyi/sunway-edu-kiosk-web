@@ -156,11 +156,17 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         return { top: "0px", left: `${left}px`, width: `${w}px`, height: `${h}px`, borderRadius: 0 };
       }
     }
-    // VARIANT 1 & 3: 90% width, image-ratio height, centred
-    const w = Math.round(vp.w * 0.90);
-    const h = Math.round(w * imageRatio);
+    // VARIANT 1 & 3 & 4: fit within 90% of both axes, maintain image aspect ratio
+    const maxW = Math.round(vp.w * 0.90);
+    const maxH = Math.round(vp.h * 0.90);
+    const wFromW = maxW;
+    const hFromW = Math.round(maxW * imageRatio);
+    // If height would overflow, scale down from height instead
+    const h = Math.min(hFromW, maxH);
+    const w = h < hFromW ? Math.round(h / imageRatio) : wFromW;
     const top = Math.round((vp.h - h) / 2);
-    return { top: `${top}px`, left: `${Math.round(vp.w * 0.05)}px`, width: `${w}px`, height: `${h}px`, borderRadius: RADIUS };
+    const left = Math.round((vp.w - w) / 2);
+    return { top: `${top}px`, left: `${left}px`, width: `${w}px`, height: `${h}px`, borderRadius: RADIUS };
   })();
 
   const collapsedGeometry = vp.w > 0

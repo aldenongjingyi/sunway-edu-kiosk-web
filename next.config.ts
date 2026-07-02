@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   devIndicators: false,
   reactStrictMode: false,
-  allowedDevOrigins: ["192.168.100.16"],
+  allowedDevOrigins: ["192.168.100.27"],
   async headers() {
     return [{
       // Only apply no-store to page routes, NOT to /_next/static/ assets (CSS/JS)
