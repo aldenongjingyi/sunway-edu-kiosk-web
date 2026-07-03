@@ -52,27 +52,13 @@ export default function SearchResults({ query, filterCategory, filterDepartment,
           )}
           {matchedLocations.map((loc, i) => (
             <div key={loc.id}>
-              <div className="flex items-start gap-3 px-4 py-3 row-press" onClick={() => onLocationSelect(loc.id)}>
-                <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 bg-[#f2f2f7] flex items-center justify-center">
-                  {loc.images[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={loc.images[0]} alt={loc.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <rect x="3" y="3" width="18" height="18" rx="2" stroke="#c7c7cc" strokeWidth="1.5"/>
-                      <path d="M3 9h18M9 21V9" stroke="#c7c7cc" strokeWidth="1.5"/>
-                    </svg>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-[17px] text-black leading-snug">{loc.title}</p>
-                  <p className="text-[14px] text-[#3c3c43] mt-0.5">
-                    {loc.levelTitles?.join(" / ")} &bull; {(loc.categories_ ?? []).map(c => c.title).join(" / ")}
-                  </p>
-                </div>
-                <div className="chevron mt-1" />
+              <div className="flex flex-col items-center px-4 py-3 row-press text-center" onClick={() => onLocationSelect(loc.id)}>
+                <p className="font-semibold text-[17px] text-black leading-snug">{loc.title}</p>
+                <p className="text-[14px] text-[#3c3c43] mt-0.5">
+                  {loc.levelTitles?.join(" / ")} &bull; {(loc.categories_ ?? []).map(c => c.title).join(" / ")}
+                </p>
               </div>
-              {i < matchedLocations.length - 1 && <div className="divider" />}
+              {i < matchedLocations.length - 1 && <div className="divider-full" />}
             </div>
           ))}
         </div>
