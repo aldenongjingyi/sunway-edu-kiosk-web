@@ -18,6 +18,7 @@ const WORKING_START_KEY = "admin.working.start";
 const WORKING_END_KEY   = "admin.working.end";
 const TABS = ["Popular Searches", "Facilities / Offices", "Departments / Staffs", "Events"] as const;
 
+// TODO: re-enable working hours enforcement before production deployment
 function checkWorkingHours(): boolean {
   return true; // disabled — always treat as working hours
 }
