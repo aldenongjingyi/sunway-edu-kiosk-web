@@ -87,7 +87,8 @@ export default function AdminPanel({ onClose }: Props) {
 
           {/* Data status */}
           <section>
-            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-3">Data Status</p>
+            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Data Status</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Records currently loaded in memory from indoorcms.com and izone.sunway.edu.my. Use Refresh API Data below to update.</p>
             <div className="bg-[#f2f2f7] rounded-xl overflow-hidden">
               <Row label="Locations" value={loaded ? String(locations.length) : "—"} />
               <div className="divider-full" />
