@@ -135,7 +135,7 @@ export default function AdminPanel({ onClose }: Props) {
           {/* Cache */}
           <section>
             <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Refresh API Data</p>
-            <p className="text-[12px] text-[#8e8e93] mb-3">Re-fetches locations, staff, highlights and trending from the server. Does not affect this device or the map.</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Re-fetches from indoorcms.com (locations, nodes, highlights, trending) and izone.sunway.edu.my (staff directory). Does not affect this device or the map.</p>
             <button
               onClick={handleClearCache}
               className="w-full py-3 rounded-xl text-white text-[15px] font-medium"
