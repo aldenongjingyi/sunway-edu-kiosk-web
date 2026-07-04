@@ -134,13 +134,14 @@ export default function AdminPanel({ onClose }: Props) {
 
           {/* Cache */}
           <section>
-            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-3">Cache</p>
+            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Refresh API Data</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Re-fetches locations, staff, highlights and trending from the server. Does not affect this device or the map.</p>
             <button
               onClick={handleClearCache}
               className="w-full py-3 rounded-xl text-white text-[15px] font-medium"
               style={{ backgroundColor: "var(--navy)" }}
             >
-              Refresh Data
+              Refresh API Data
             </button>
             {cacheStatus && (
               <p className="text-center text-[13px] text-[#6b6b6b] mt-2 fade-in">{cacheStatus}</p>
