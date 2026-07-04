@@ -102,7 +102,7 @@ export default function AdminPanel({ onClose }: Props) {
           {/* Working hours */}
           <section>
             <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Working Hours</p>
-            <p className="text-[12px] text-[#8e8e93] mb-3">Outside these hours the kiosk displays a black lockscreen that cannot be dismissed. Currently disabled — kiosk is always active.</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Outside these hours the kiosk displays a black lockscreen that cannot be dismissed.</p>
             <div className="bg-[#f2f2f7] rounded-xl overflow-hidden">
               <div className="flex items-center px-4 py-3 gap-3">
                 <span className="flex-1 text-[15px] text-black">Start</span>
