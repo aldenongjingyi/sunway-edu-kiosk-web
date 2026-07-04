@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useDataStore } from "@/lib/store";
 
 interface Props {
@@ -21,7 +21,7 @@ function minutesToTime(mins: number): string {
 }
 
 export default function AdminPanel({ onClose }: Props) {
-  const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, loadData, loadStaff } = useDataStore();
+  const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, lastRefreshed, lastStaffRefreshed, loadData, loadStaff } = useDataStore();
 
   const [workingStart, setWorkingStart] = useState(() =>
     minutesToTime(parseInt(localStorage?.getItem(WORKING_START_KEY) ?? "450")) // 7:30
@@ -31,7 +31,23 @@ export default function AdminPanel({ onClose }: Props) {
   );
   const [kioskNodeId, setKioskNodeId] = useState(() => localStorage?.getItem(KIOSK_NODE_KEY) ?? "");
   const [cacheStatus, setCacheStatus] = useState("");
+  const [, setTick] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Tick every 30s so relative timestamps stay fresh
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const relativeTime = useCallback((date: Date | null) => {
+    if (!date) return "—";
+    const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (secs < 60) return "just now";
+    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+    if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+    return date.toLocaleDateString();
+  }, []);
 
   // Close on backdrop click
   const handleBackdrop = (e: React.MouseEvent) => {
@@ -97,6 +113,10 @@ export default function AdminPanel({ onClose }: Props) {
               <Row label="Highlights" value={loaded ? String(highlights.length) : "—"} />
               <div className="divider-full" />
               <Row label="Trending" value={loaded ? String(trendings.length) : "—"} />
+              <div className="divider-full" />
+              <Row label="Campus data fetched" value={relativeTime(lastRefreshed)} muted />
+              <div className="divider-full" />
+              <Row label="Staff data fetched" value={relativeTime(lastStaffRefreshed)} muted />
             </div>
           </section>
 
