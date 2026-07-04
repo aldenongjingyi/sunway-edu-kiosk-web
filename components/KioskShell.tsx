@@ -49,7 +49,12 @@ export default function KioskShell() {
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load data on mount, expand screensaver once highlights are ready
+  // Also reopen admin panel if we just reloaded after saving a kiosk node
   useEffect(() => {
+    if (sessionStorage.getItem("admin.reopen")) {
+      sessionStorage.removeItem("admin.reopen");
+      setShowAdmin(true);
+    }
     loadData().then(() => {
       loadStaff();
       setScreensaverExpanded(true);
@@ -197,7 +202,6 @@ export default function KioskShell() {
       {/* Admin panel */}
       {showAdmin && <AdminPanel
         onClose={() => { setShowAdmin(false); setQuery(""); }}
-        onKioskNodeSaved={() => { setMapMounted(false); setMapDestinationId(null); }}
       />}
 
       {/* Map overlay — kept mounted once shown so it doesn't re-fetch on every open */}

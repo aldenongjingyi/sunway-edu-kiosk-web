@@ -4,7 +4,6 @@ import { useDataStore } from "@/lib/store";
 
 interface Props {
   onClose: () => void;
-  onKioskNodeSaved?: () => void;
 }
 
 const WORKING_START_KEY = "admin.working.start";
@@ -21,7 +20,7 @@ function minutesToTime(mins: number): string {
   return `${h}:${m}`;
 }
 
-export default function AdminPanel({ onClose, onKioskNodeSaved }: Props) {
+export default function AdminPanel({ onClose }: Props) {
   const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, lastRefreshed, lastStaffRefreshed, loadData, loadStaff } = useDataStore();
 
   const [workingStart, setWorkingStart] = useState(() =>
@@ -217,9 +216,8 @@ export default function AdminPanel({ onClose, onKioskNodeSaved }: Props) {
             <button
               onClick={() => {
                 localStorage.setItem(KIOSK_NODE_KEY, kioskNodeId);
-                onKioskNodeSaved?.();
-                setCacheStatus("Kiosk node saved. Map will use new location next time it opens.");
-                setTimeout(() => setCacheStatus(""), 3000);
+                sessionStorage.setItem("admin.reopen", "1");
+                window.location.reload();
               }}
               className="mt-2 w-full py-3 rounded-xl text-white text-[15px] font-medium"
               style={{ backgroundColor: "var(--navy)" }}
