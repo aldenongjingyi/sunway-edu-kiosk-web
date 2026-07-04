@@ -195,7 +195,10 @@ export default function KioskShell() {
       <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} isWorkingHours={withinWorkingHours} />
 
       {/* Admin panel */}
-      {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); setQuery(""); }} />}
+      {showAdmin && <AdminPanel
+        onClose={() => { setShowAdmin(false); setQuery(""); }}
+        onKioskNodeSaved={() => { setMapMounted(false); setMapDestinationId(null); }}
+      />}
 
       {/* Map overlay — kept mounted once shown so it doesn't re-fetch on every open */}
       {mapMounted && <MapView destinationId={mapDestinationId} onClose={handleMapClose} />}
