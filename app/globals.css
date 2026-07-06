@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Mulish:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 
 :root {
@@ -9,8 +9,8 @@
   --divider: #dde0e8;
   --text-secondary: #6b6b6b;
   --bg: #f4f5f9;
-  --font-head: "Barlow Condensed", -apple-system, sans-serif;
-  --font-body: "Barlow", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-head: "Archivo", -apple-system, sans-serif;
+  --font-body: "Mulish", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * {
