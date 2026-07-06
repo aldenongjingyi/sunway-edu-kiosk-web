@@ -14,7 +14,7 @@ interface Props {
 // 2 = Black background, card flush to nearest screen edge (0 margin on narrow axis)
 // 3 = Blurred image background — Apple Music style
 // 4 = Average colour background — extreme blur creates a smooth colour wash from the image
-const VARIANT: 1 | 2 | 3 | 4 = 4;
+const VARIANT: 1 | 2 | 3 | 4 = 3;
 // ───────────────────────────────────────────────────────────────────────────
 
 const SHADOW = "0 8px 32px rgba(0,0,0,0.35)";
