@@ -12,6 +12,8 @@ interface DataStore {
   staffs: Staff[];
   loaded: boolean;
   staffLoaded: boolean;
+  lastRefreshed: Date | null;
+  lastStaffRefreshed: Date | null;
   loadData: () => Promise<void>;
   loadStaff: () => Promise<void>;
 }
@@ -32,6 +34,8 @@ export const useDataStore = create<DataStore>((set, get) => ({
   staffs: [],
   loaded: false,
   staffLoaded: false,
+  lastRefreshed: null,
+  lastStaffRefreshed: null,
 
   loadData: async () => {
     if (get().loaded) return;
@@ -85,6 +89,7 @@ export const useDataStore = create<DataStore>((set, get) => ({
         highlights,
         trendings: [...data.trendings].sort((a, b) => a.position - b.position),
         loaded: true,
+        lastRefreshed: new Date(),
       });
     } catch (e) {
       console.error("Failed to load kiosk data", e);
@@ -106,7 +111,7 @@ export const useDataStore = create<DataStore>((set, get) => ({
         return { ...s, levelTitle };
       });
 
-      set({ staffs: resolved, staffLoaded: true });
+      set({ staffs: resolved, staffLoaded: true, lastStaffRefreshed: new Date() });
     } catch (e) {
       console.error("Failed to load staff data", e);
     }

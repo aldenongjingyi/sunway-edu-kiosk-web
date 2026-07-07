@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useDataStore } from "@/lib/store";
 
 interface Props {
@@ -21,7 +21,7 @@ function minutesToTime(mins: number): string {
 }
 
 export default function AdminPanel({ onClose }: Props) {
-  const { loaded, staffLoaded, locations, staffs, highlights, trendings, loadData, loadStaff } = useDataStore();
+  const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, lastRefreshed, lastStaffRefreshed, loadData, loadStaff } = useDataStore();
 
   const [workingStart, setWorkingStart] = useState(() =>
     minutesToTime(parseInt(localStorage?.getItem(WORKING_START_KEY) ?? "450")) // 7:30
@@ -31,7 +31,23 @@ export default function AdminPanel({ onClose }: Props) {
   );
   const [kioskNodeId, setKioskNodeId] = useState(() => localStorage?.getItem(KIOSK_NODE_KEY) ?? "");
   const [cacheStatus, setCacheStatus] = useState("");
+  const [, setTick] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Tick every 30s so relative timestamps stay fresh
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const relativeTime = useCallback((date: Date | null) => {
+    if (!date) return "—";
+    const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (secs < 60) return "just now";
+    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+    if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+    return date.toLocaleDateString();
+  }, []);
 
   // Close on backdrop click
   const handleBackdrop = (e: React.MouseEvent) => {
@@ -87,7 +103,8 @@ export default function AdminPanel({ onClose }: Props) {
 
           {/* Data status */}
           <section>
-            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-3">Data Status</p>
+            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Data Status</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Records currently loaded in memory from indoorcms.com and izone.sunway.edu.my. Use Refresh API Data below to update.</p>
             <div className="bg-[#f2f2f7] rounded-xl overflow-hidden">
               <Row label="Locations" value={loaded ? String(locations.length) : "—"} />
               <div className="divider-full" />
@@ -96,12 +113,17 @@ export default function AdminPanel({ onClose }: Props) {
               <Row label="Highlights" value={loaded ? String(highlights.length) : "—"} />
               <div className="divider-full" />
               <Row label="Trending" value={loaded ? String(trendings.length) : "—"} />
+              <div className="divider-full" />
+              <Row label="Campus data fetched" value={relativeTime(lastRefreshed)} muted />
+              <div className="divider-full" />
+              <Row label="Staff data fetched" value={relativeTime(lastStaffRefreshed)} muted />
             </div>
           </section>
 
           {/* Working hours */}
           <section>
-            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-3">Working Hours</p>
+            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Working Hours</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Outside these hours the kiosk displays a black lockscreen that cannot be dismissed. Currently disabled for development.</p>
             <div className="bg-[#f2f2f7] rounded-xl overflow-hidden">
               <div className="flex items-center px-4 py-3 gap-3">
                 <span className="flex-1 text-[15px] text-black">Start</span>
@@ -134,13 +156,14 @@ export default function AdminPanel({ onClose }: Props) {
 
           {/* Cache */}
           <section>
-            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-3">Cache</p>
+            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Refresh API Data</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Re-fetches from indoorcms.com (locations, nodes, highlights, trending) and izone.sunway.edu.my (staff directory). Does not affect this device or the map.</p>
             <button
               onClick={handleClearCache}
               className="w-full py-3 rounded-xl text-white text-[15px] font-medium"
               style={{ backgroundColor: "var(--navy)" }}
             >
-              Refresh Data
+              Refresh API Data
             </button>
             {cacheStatus && (
               <p className="text-center text-[13px] text-[#6b6b6b] mt-2 fade-in">{cacheStatus}</p>
@@ -149,34 +172,58 @@ export default function AdminPanel({ onClose }: Props) {
 
           {/* Map integration */}
           <section>
-            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-3">Map Integration</p>
+            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">Map Integration</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">
+              Kiosk nodes are sourced from indoorcms.com — filtered to locations whose venue code contains &ldquo;KIOSK&rdquo;.
+            </p>
             <div className="bg-[#f2f2f7] rounded-xl overflow-hidden">
               <div className="flex items-center px-4 py-3 gap-3">
-                <span className="flex-1 text-[15px] text-black">Kiosk Node ID</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="e.g. 868"
-                  value={kioskNodeId}
-                  onChange={e => setKioskNodeId(e.target.value)}
-                  className="text-[15px] text-[#00226B] bg-transparent border-none outline-none font-medium w-24 text-right"
-                />
+                <span className="flex-1 text-[15px] text-black">This Kiosk</span>
+                {(() => {
+                  const kioskNodes = nodes
+                    .filter(n => {
+                      if (!n.location) return false;
+                      const loc = locations.find(l => l.id === n.location);
+                      return loc?.venue?.toUpperCase().includes("KIOSK");
+                    })
+                    .map(n => {
+                      const loc = locations.find(l => l.id === n.location);
+                      const level = levels[n.level];
+                      return { nodeId: n.id, venue: loc?.venue ?? "", levelLabel: level?.label ?? "", levelTitle: level?.title ?? "" };
+                    })
+                    .sort((a, b) => a.venue.localeCompare(b.venue));
+
+                  if (!loaded) return <span className="text-[14px] text-[#8e8e93]">Loading…</span>;
+                  if (kioskNodes.length === 0) return <span className="text-[14px] text-[#8e8e93]">No kiosk nodes found</span>;
+
+                  return (
+                    <select
+                      value={kioskNodeId}
+                      onChange={e => setKioskNodeId(e.target.value)}
+                      className="text-[14px] text-[#00226B] bg-transparent border-none outline-none font-medium max-w-[60%] text-right"
+                    >
+                      <option value="">Select…</option>
+                      {kioskNodes.map(k => (
+                        <option key={k.nodeId} value={String(k.nodeId)}>
+                          {k.venue} (Node {k.nodeId})
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
               </div>
             </div>
             <button
               onClick={() => {
                 localStorage.setItem(KIOSK_NODE_KEY, kioskNodeId);
-                setCacheStatus("Kiosk node saved.");
-                setTimeout(() => setCacheStatus(""), 2000);
+                sessionStorage.setItem("admin.reopen", "1");
+                window.location.reload();
               }}
               className="mt-2 w-full py-3 rounded-xl text-white text-[15px] font-medium"
               style={{ backgroundColor: "var(--navy)" }}
             >
               Save Node ID
             </button>
-            <p className="text-[12px] text-[#8e8e93] mt-2 text-center">
-              Used as the &ldquo;You Are Here&rdquo; start point for directions
-            </p>
           </section>
 
           <div className="pb-4" />
