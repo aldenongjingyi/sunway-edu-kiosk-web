@@ -17,6 +17,12 @@ const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 const WORKING_START_KEY = "admin.working.start";
 const WORKING_END_KEY   = "admin.working.end";
 const TABS = ["Popular Searches", "Facilities / Offices", "Departments", "Events"] as const;
+const TAB_LINES: string[][] = [
+  ["Popular", "Searches"],
+  ["Facilities /", "Offices"],
+  ["Departments"],
+  ["Events"],
+];
 
 function checkWorkingHours(): boolean {
   return true; // disabled — always treat as working hours
@@ -268,8 +274,8 @@ export default function KioskShell() {
         <div className="v1-tabs">
           {TABS.map((t, i) => (
             <button key={t} className={`v1-tab${tab === i ? " active" : ""}`} onClick={() => handleTabChange(i)}>
-              {t.split(" ").map((word, wi, arr) => (
-                <span key={wi}>{word}{wi < arr.length - 1 ? <br /> : null}</span>
+              {TAB_LINES[i].map((line, li) => (
+                <span key={li}>{line}{li < TAB_LINES[i].length - 1 ? <br /> : null}</span>
               ))}
             </button>
           ))}
