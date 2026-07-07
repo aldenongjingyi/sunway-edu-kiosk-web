@@ -300,11 +300,6 @@ export default function KioskShell() {
         </>
       )}
 
-      {!showResults && tab === 0 && (
-        <div className="text-center pb-3 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2" }}>
-          <p>Version 1.0 Build #14</p>
-        </div>
-      )}
     </div>
   );
 }
