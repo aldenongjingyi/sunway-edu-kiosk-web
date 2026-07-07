@@ -253,7 +253,6 @@ export default function MapView({ destinationId, onClose }: Props) {
   const content = (
     <div
       className="fixed inset-0 z-[60] bg-white"
-      style={{ position: "fixed" }}
       style={{
         visibility: destinationId ? "visible" : "hidden",
         pointerEvents: destinationId ? "auto" : "none",
