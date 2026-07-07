@@ -268,7 +268,9 @@ export default function KioskShell() {
         <div className="v1-tabs">
           {TABS.map((t, i) => (
             <button key={t} className={`v1-tab${tab === i ? " active" : ""}`} onClick={() => handleTabChange(i)}>
-              {t}
+              {t.split(" ").map((word, wi, arr) => (
+                <span key={wi}>{word}{wi < arr.length - 1 ? <br /> : null}</span>
+              ))}
             </button>
           ))}
         </div>
