@@ -9,7 +9,7 @@ interface Props {
 }
 
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
-const SCRIPT_URL = "/api/proxy?url=https%3A%2F%2Fmaps-sunwayedu.getmallapp.com%2Fwayfinder-map.min.js";
+const SCRIPT_URL = "/wayfinder-map.min.js";
 const DATA_URL = "https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz";
 const MAP_URL  = "https://sunwayedu3-data.indoorcms.com/maps_v001.json.gz";
 

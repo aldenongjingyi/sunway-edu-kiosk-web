@@ -1,16 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "export",
   devIndicators: false,
   reactStrictMode: false,
+  images: { unoptimized: true },
   allowedDevOrigins: ["192.168.100.27"],
-  async headers() {
-    return [{
-      // Only apply no-store to page routes, NOT to /_next/static/ assets (CSS/JS)
-      source: "/((?!_next/static).*)",
-      headers: [{ key: "Cache-Control", value: "no-store" }],
-    }];
-  },
+  // Cache-Control headers are set per-file in scripts/deploy.mjs
 };
 
 export default nextConfig;
