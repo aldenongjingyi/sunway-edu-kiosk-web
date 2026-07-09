@@ -24,3 +24,4 @@ jobs:
           DO_SPACES_REGION: ${{ secrets.DO_SPACES_REGION }}
           DO_SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
           DO_SPACES_PATH: ${{ secrets.DO_SPACES_PATH }}
+          NEXT_PUBLIC_WAYFINDER_URL: https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com/wayfinder-map.min.js
