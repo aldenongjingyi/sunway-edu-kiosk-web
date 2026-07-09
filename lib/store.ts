@@ -19,7 +19,7 @@ interface DataStore {
 }
 
 async function fetchGzip(url: string): Promise<unknown> {
-  const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`);
+  const res = await fetch(`https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}`);
   if (!res.ok) throw new Error(`Failed to fetch ${url}`);
   return res.json();
 }
