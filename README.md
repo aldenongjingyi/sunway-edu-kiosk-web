@@ -117,3 +117,24 @@ Access: tap the version string 5 times → enter password `my3245campusx`
 ## TODO (Before Production)
 - Evaluate replacing Cloudflare Worker with DO Functions to consolidate to a single provider
 - Enable static website hosting on DO Spaces so the root URL works without `/index.html`
+
+---
+
+## Switching Branches on the Elo
+
+DO Spaces always serves whatever was last deployed. Both `main` and `design/v1` build to the same bucket — whichever was deployed most recently is what the Elo loads.
+
+**Deploy `design/v1`:**
+```bash
+git checkout design/v1
+node --env-file=.env.local scripts/deploy.mjs
+git checkout main
+```
+
+**Switch back to `main`:**
+```bash
+git checkout main
+node --env-file=.env.local scripts/deploy.mjs
+```
+
+The Elo will pick up the change on next app restart (or force-stop + start via ADB).
