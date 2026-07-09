@@ -30,6 +30,8 @@ export default function AdminPanel({ onClose }: Props) {
     minutesToTime(parseInt(localStorage?.getItem(WORKING_END_KEY) ?? "1170")) // 19:30
   );
   const [kioskNodeId, setKioskNodeId] = useState(() => localStorage?.getItem(KIOSK_NODE_KEY) ?? "");
+  const [nodeSearch, setNodeSearch] = useState("");
+  const [nodePickerOpen, setNodePickerOpen] = useState(false);
   const [cacheStatus, setCacheStatus] = useState("");
   const [, setTick] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -176,43 +178,91 @@ export default function AdminPanel({ onClose }: Props) {
             <p className="text-[12px] text-[#8e8e93] mb-3">
               Kiosk nodes are sourced from indoorcms.com — filtered to locations whose venue code contains &ldquo;KIOSK&rdquo;.
             </p>
-            <div className="bg-[#f2f2f7] rounded-xl overflow-hidden">
-              <div className="flex items-center px-4 py-3 gap-3">
-                <span className="flex-1 text-[15px] text-black">This Kiosk</span>
-                {(() => {
-                  const kioskNodes = nodes
-                    .filter(n => {
-                      if (!n.location) return false;
-                      const loc = locations.find(l => l.id === n.location);
-                      return loc?.venue?.toUpperCase().includes("KIOSK");
-                    })
-                    .map(n => {
-                      const loc = locations.find(l => l.id === n.location);
-                      const level = levels[n.level];
-                      return { nodeId: n.id, venue: loc?.venue ?? "", levelLabel: level?.label ?? "", levelTitle: level?.title ?? "" };
-                    })
-                    .sort((a, b) => a.venue.localeCompare(b.venue));
+            {(() => {
+              const kioskNodes = nodes
+                .filter(n => {
+                  if (!n.location) return false;
+                  const loc = locations.find(l => l.id === n.location);
+                  return loc?.venue?.toUpperCase().includes("KIOSK");
+                })
+                .map(n => {
+                  const loc = locations.find(l => l.id === n.location);
+                  const level = levels[n.level];
+                  return { nodeId: n.id, venue: loc?.venue ?? "", levelLabel: level?.label ?? "", levelTitle: level?.title ?? "" };
+                })
+                .sort((a, b) => a.venue.localeCompare(b.venue));
 
-                  if (!loaded) return <span className="text-[14px] text-[#8e8e93]">Loading…</span>;
-                  if (kioskNodes.length === 0) return <span className="text-[14px] text-[#8e8e93]">No kiosk nodes found</span>;
+              const filtered = kioskNodes.filter(k =>
+                nodeSearch === "" ||
+                k.venue.toLowerCase().includes(nodeSearch.toLowerCase()) ||
+                String(k.nodeId).includes(nodeSearch)
+              );
 
-                  return (
-                    <select
-                      value={kioskNodeId}
-                      onChange={e => setKioskNodeId(e.target.value)}
-                      className="text-[14px] text-[#00226B] bg-transparent border-none outline-none font-medium max-w-[60%] text-right"
+              const selected = kioskNodes.find(k => String(k.nodeId) === kioskNodeId);
+
+              return (
+                <div className="bg-[#f2f2f7] rounded-xl overflow-hidden">
+                  {/* Selected node display — tap to toggle picker */}
+                  <button
+                    className="w-full flex items-center px-4 py-3 gap-3 text-left"
+                    onClick={() => setNodePickerOpen(o => !o)}
+                  >
+                    <span className="flex-1 text-[15px] text-black">Selected</span>
+                    <span className="text-[14px] text-[#00226B] font-medium">
+                      {selected ? `${selected.venue} (Node ${selected.nodeId})` : "None"}
+                    </span>
+                    <svg
+                      width="12" height="12" viewBox="0 0 12 12" fill="none"
+                      style={{ transform: nodePickerOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+                      className="flex-shrink-0 opacity-40 ml-1"
                     >
-                      <option value="">Select…</option>
-                      {kioskNodes.map(k => (
-                        <option key={k.nodeId} value={String(k.nodeId)}>
-                          {k.venue} (Node {k.nodeId})
-                        </option>
+                      <path d="M2 4l4 4 4-4" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                  {nodePickerOpen && (<>
+                    {/* Search input */}
+                    <div className="flex items-center px-4 py-2 gap-2 border-t border-[#e5e5ea]">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 opacity-40">
+                        <circle cx="11" cy="11" r="7" stroke="#000" strokeWidth="2"/>
+                        <path d="m16.5 16.5 3 3" stroke="#000" strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
+                      <input
+                        type="text"
+                        placeholder="Search node ID or venue…"
+                        value={nodeSearch}
+                        onChange={e => setNodeSearch(e.target.value)}
+                        className="flex-1 text-[14px] bg-transparent border-none outline-none text-black placeholder:text-[#8e8e93]"
+                      />
+                      {nodeSearch && (
+                        <button onClick={() => setNodeSearch("")} className="text-[#8e8e93] text-[12px]">✕</button>
+                      )}
+                    </div>
+                    {/* Node list */}
+                    <div style={{ maxHeight: 180, overflowY: "auto" }} className="border-t border-[#e5e5ea]">
+                      {!loaded && <p className="px-4 py-3 text-[14px] text-[#8e8e93]">Loading…</p>}
+                      {loaded && filtered.length === 0 && <p className="px-4 py-3 text-[14px] text-[#8e8e93]">No results</p>}
+                      {filtered.map((k, i) => (
+                        <div key={k.nodeId}>
+                          {i > 0 && <div className="divider-full" />}
+                          <button
+                            className="w-full flex items-center justify-between px-4 py-3 text-left"
+                            onClick={() => { setKioskNodeId(String(k.nodeId)); setNodeSearch(""); setNodePickerOpen(false); }}
+                          >
+                            <span className="text-[14px] text-black flex-1">{k.venue}</span>
+                            <span className="text-[12px] text-[#8e8e93] ml-2">Node {k.nodeId}</span>
+                            {String(k.nodeId) === kioskNodeId && (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="ml-2 flex-shrink-0">
+                                <path d="M5 12l5 5L20 7" stroke="#00226B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            )}
+                          </button>
+                        </div>
                       ))}
-                    </select>
-                  );
-                })()}
-              </div>
-            </div>
+                    </div>
+                  </>)}
+                </div>
+              );
+            })()}
             <button
               onClick={() => {
                 localStorage.setItem(KIOSK_NODE_KEY, kioskNodeId);
