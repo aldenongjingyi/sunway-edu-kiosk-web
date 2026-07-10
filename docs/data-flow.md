@@ -145,3 +145,33 @@ sequenceDiagram
 | Option A (CORS fix) | DO Spaces (static) | Direct fetch | Cloudflare Worker | Cloudflare (staff only) |
 | Option B (Django) | indoorcms.com | Same origin | Proxied via Django | None |
 | Option C (DO App) | DO App Platform (server) | Proxied via Next.js | Proxied via Next.js | None |
+| Option F (DO CDN + Functions) | DO Spaces CDN (static) | DO Function | DO Function | None (all DO) |
+
+---
+
+## 6. Option F — DO Spaces CDN + DO Functions (recommended for production)
+
+Everything stays within DigitalOcean. CDN serves the static app faster globally.
+DO Function replaces Cloudflare Worker as the CORS proxy.
+
+```mermaid
+sequenceDiagram
+    participant Elo as Elo Kiosk (Browser)
+    participant CDN as DO Spaces CDN (Static Files)
+    participant Fn as DO Function (CORS Proxy)
+    participant CMS as indoorcms.com
+    participant Staff as izone.sunway.edu.my
+
+    Elo->>CDN: Load page (served from edge)
+    CDN-->>Elo: HTML / CSS / JS
+
+    Elo->>Fn: GET /?url=indoorcms.com/... (cross-origin, but Fn allows it)
+    Fn->>CMS: Fetch campus data (server-to-server, no CORS)
+    CMS-->>Fn: Campus data
+    Fn-->>Elo: Campus data + Access-Control-Allow-Origin header
+
+    Elo->>Fn: GET /?url=izone.sunway.edu.my/... (cross-origin, but Fn allows it)
+    Fn->>Staff: Fetch staff data (server-to-server, no CORS)
+    Staff-->>Fn: Staff data
+    Fn-->>Elo: Staff data + Access-Control-Allow-Origin header
+```
