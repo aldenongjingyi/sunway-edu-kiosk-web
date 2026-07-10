@@ -175,3 +175,44 @@ sequenceDiagram
     Staff-->>Fn: Staff data
     Fn-->>Elo: Staff data + Access-Control-Allow-Origin header
 ```
+
+---
+
+## Proxy Problem — Options
+
+The proxy is needed because the browser cannot fetch data from a different origin without that server's permission (`Access-Control-Allow-Origin` header).
+
+There are two APIs involved:
+- `indoorcms.com` — **we control this** (Django)
+- `izone.sunway.edu.my` — **we do not control this** (Sunway IT)
+
+### For indoorcms.com (we control it)
+
+The simplest fix — add CORS headers directly on the Django server. No proxy needed at all.
+
+```python
+# In Django settings or middleware
+CORS_ALLOW_ALL_ORIGINS = True  # or restrict to specific origins
+```
+
+Or using the `django-cors-headers` package:
+```bash
+pip install django-cors-headers
+```
+
+### For izone.sunway.edu.my (we don't control it)
+
+A proxy is unavoidable. Options:
+
+| Option | How | Vendor | Complexity |
+|---|---|---|---|
+| **Cloudflare Worker** (current) | Serverless function at the edge | Cloudflare | Low |
+| **DO Functions** | Same idea, on DigitalOcean | DigitalOcean | Low |
+| **Django proxy view** | Add a proxy endpoint to indoorcms.com | indoorcms.com | Low |
+| **Next.js API route** | Back to a server (Vercel or DO App Platform) | Vercel or DO | Medium |
+| **Nginx reverse proxy** | Server sits in front and forwards API calls | Self-hosted | Medium |
+
+### Recommended path
+
+1. Enable CORS on `indoorcms.com` Django → eliminates proxy for campus data entirely
+2. For `izone.sunway.edu.my` → migrate Cloudflare Worker to DO Function (Option F) to consolidate everything on DigitalOcean
