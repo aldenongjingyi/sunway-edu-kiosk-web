@@ -14,7 +14,7 @@ interface Props {
 // 2 = Black background, card flush to nearest screen edge (0 margin on narrow axis)
 // 3 = Blurred image background — Apple Music style
 // 4 = Average colour background — extreme blur creates a smooth colour wash from the image
-const VARIANT: 1 | 2 | 3 | 4 = 4;
+const VARIANT: 1 | 2 | 3 | 4 = 3;
 // ───────────────────────────────────────────────────────────────────────────
 
 const SHADOW = "0 8px 32px rgba(0,0,0,0.35)";
@@ -193,7 +193,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     inset: 0,
     zIndex: 49,
     pointerEvents: isExpanded ? "auto" : "none",
-    background: (VARIANT === 3 || VARIANT === 4) ? "rgba(0,0,0,0)" : "#000",
+    background: VARIANT === 4 ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.6)",
     opacity: isExpanded ? 1 : 0,
     transition: "opacity 0.35s ease",
   };
@@ -224,23 +224,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   return createPortal(
     <>
       <div style={backdropStyle} onClick={() => { restartTimer(); onTap(); }} />
-      {/* Variant 3: blurred ambient background */}
-      {VARIANT === 3 && isExpanded && bgImageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={bgImageUrl}
-          alt=""
-          aria-hidden
-          style={{
-            position: "fixed", inset: 0, zIndex: 48,
-            width: "100%", height: "100%",
-            objectFit: "cover",
-            filter: "blur(48px) saturate(1.4) brightness(0.5)",
-            transform: "scale(1.08)",
-            pointerEvents: "none",
-          }}
-        />
-      )}
+      {/* Variant 3: kiosk UI dimmed behind card via backdropStyle */}
       {/* Variant 4: average colour wash — extreme blur approximates the image's dominant colour */}
       {VARIANT === 4 && isExpanded && bgImageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
