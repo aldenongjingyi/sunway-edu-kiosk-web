@@ -193,7 +193,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     inset: 0,
     zIndex: 49,
     pointerEvents: isExpanded ? "auto" : "none",
-    background: (VARIANT === 3 || VARIANT === 4) ? "rgba(0,0,0,0)" : "#000",
+    background: VARIANT === 4 ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.6)",
     opacity: isExpanded ? 1 : 0,
     transition: "opacity 0.35s ease",
   };
@@ -224,31 +224,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   return createPortal(
     <>
       <div style={backdropStyle} onClick={() => { restartTimer(); onTap(); }} />
-      {/* Variant 3: blurred ambient background */}
-      {VARIANT === 3 && isExpanded && bgImageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={bgImageUrl}
-          alt=""
-          aria-hidden
-          style={{
-            position: "fixed", inset: 0, zIndex: 48,
-            width: "100%", height: "100%",
-            objectFit: "cover",
-            filter: "blur(80px) saturate(1.2) brightness(0.6)",
-            transform: "scale(1.2)",
-            pointerEvents: "none",
-          }}
-        />
-      )}
-      {/* Dark overlay — cleans up blur muddiness and improves card contrast */}
-      {VARIANT === 3 && isExpanded && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 48,
-          background: "rgba(0,0,0,0.45)",
-          pointerEvents: "none",
-        }} />
-      )}
+      {/* Variant 3: kiosk UI dimmed behind card via backdropStyle */
       {/* Variant 4: average colour wash — extreme blur approximates the image's dominant colour */}
       {VARIANT === 4 && isExpanded && bgImageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
