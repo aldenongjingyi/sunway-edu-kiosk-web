@@ -31,31 +31,24 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
 
   // ── Slide state ───────────────────────────────────────────────────────────
   const [currentIdx, setCurrentIdx] = useState(0);
-  // How far both cards are offset from their base positions (follows finger during drag)
+  // Pixel offset applied to ALL three cards together (prev, current, next)
   const [slideOffset, setSlideOffset] = useState(0);
-  // Adjacent card shown during drag / auto-advance
-  const [adjIdx, setAdjIdx] = useState<number | null>(null);
-  // +1 = next slide is to the right, -1 = prev slide is to the left
-  const [adjDir, setAdjDir] = useState<1 | -1>(1);
-  // Whether CSS transition is active (off during drag so card follows finger instantly)
+  // Whether CSS slide transition is active (disabled during drag)
   const [slideAnimate, setSlideAnimate] = useState(false);
 
-  // ── Refs for always-fresh values in async callbacks ───────────────────────
+  // ── Refs for always-fresh values inside callbacks ─────────────────────────
   const isAnimating = useRef(false);
+  // "next" | "prev" | "snap" | null — direction to commit after animation ends
   const commitRef = useRef<"next" | "prev" | "snap" | null>(null);
-  const adjIdxRef = useRef<number | null>(null);
-  const currentIdxRef = useRef(0);
   const nRef = useRef(n);
-  const cardWidthRef = useRef(0);
+  const vpWRef = useRef(0); // viewport width, kept fresh for timer callback
   const isDragging = useRef(false);
   const dragStartX = useRef<number | null>(null);
   const dragDeltaRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ratioSetRef = useRef(false);
 
-  useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
   useEffect(() => { nRef.current = n; }, [n]);
-  useEffect(() => { adjIdxRef.current = adjIdx; }, [adjIdx]);
 
   const [imageRatio, setImageRatio] = useState(1.35);
   const [mounted, setMounted] = useState(false);
@@ -65,10 +58,10 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   useEffect(() => {
     const update = () => {
       const vv = window.visualViewport;
-      setVp({
-        w: vv ? Math.round(vv.width) : window.innerWidth,
-        h: vv ? Math.round(vv.height) : window.innerHeight,
-      });
+      const w = vv ? Math.round(vv.width) : window.innerWidth;
+      const h = vv ? Math.round(vv.height) : window.innerHeight;
+      vpWRef.current = w;
+      setVp({ w, h });
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
@@ -81,15 +74,15 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
 
   // ── Geometry ──────────────────────────────────────────────────────────────
   const expandedGeometry = (() => {
-    if (!vp.w) return { top: "5vh", left: "5vw", width: "90vw", height: "90vh", borderRadius: RADIUS, wNum: 0 };
+    if (!vp.w) return { top: "5vh", left: "5vw", width: "90vw", height: "90vh", borderRadius: RADIUS };
     if (VARIANT === 2) {
       const portrait = vp.h >= vp.w;
       if (portrait) {
         const w = vp.w, h = Math.round(w * imageRatio), top = Math.round((vp.h - h) / 2);
-        return { top: `${top}px`, left: "0px", width: `${w}px`, height: `${h}px`, borderRadius: 0, wNum: w };
+        return { top: `${top}px`, left: "0px", width: `${w}px`, height: `${h}px`, borderRadius: 0 };
       } else {
         const h = vp.h, w = Math.round(h / imageRatio), left = Math.round((vp.w - w) / 2);
-        return { top: "0px", left: `${left}px`, width: `${w}px`, height: `${h}px`, borderRadius: 0, wNum: w };
+        return { top: "0px", left: `${left}px`, width: `${w}px`, height: `${h}px`, borderRadius: 0 };
       }
     }
     // VARIANT 1 & 3 & 4: fit within 90% of both axes, maintain image aspect ratio
@@ -100,7 +93,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     const w = h < hFromW ? Math.round(h / imageRatio) : maxW;
     const top = Math.round((vp.h - h) / 2);
     const left = Math.round((vp.w - w) / 2);
-    return { top: `${top}px`, left: `${left}px`, width: `${w}px`, height: `${h}px`, borderRadius: RADIUS, wNum: w };
+    return { top: `${top}px`, left: `${left}px`, width: `${w}px`, height: `${h}px`, borderRadius: RADIUS };
   })();
 
   const collapsedGeometry = vp.w > 0
@@ -110,56 +103,45 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         width: `${THUMB_PX}px`,
         height: `${Math.round(THUMB_PX * 4 / 3)}px`,
         borderRadius: RADIUS,
-        wNum: THUMB_PX,
       }
-    : { top: "calc(100vh - 180px)", left: "calc(100vw - 140px)", width: "120px", height: "160px", borderRadius: RADIUS, wNum: 120 };
+    : { top: "calc(100vh - 180px)", left: "calc(100vw - 140px)", width: "120px", height: "160px", borderRadius: RADIUS };
 
   const geom = isExpanded ? expandedGeometry : collapsedGeometry;
 
-  // Keep cardWidthRef current so timer callback always uses correct width
-  useEffect(() => { cardWidthRef.current = geom.wNum; }, [geom.wNum]);
-
-  // Reset slide state when expand/collapse (avoids mid-slide geometry conflicts)
+  // Reset slide state when expand/collapse starts
   useEffect(() => {
     isAnimating.current = false;
     commitRef.current = null;
     setSlideAnimate(false);
     setSlideOffset(0);
-    setAdjIdx(null);
   }, [isExpanded]);
 
   // ── Slide logic ───────────────────────────────────────────────────────────
   const handleSlideEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
     if (e.propertyName !== "transform") return;
-    if (commitRef.current === "next" || commitRef.current === "prev") {
-      const target = adjIdxRef.current;
-      if (target !== null) setCurrentIdx(target);
+    if (commitRef.current === "next") {
+      setCurrentIdx(i => (i + 1) % nRef.current);
+    } else if (commitRef.current === "prev") {
+      setCurrentIdx(i => (i - 1 + nRef.current) % nRef.current);
     }
     setSlideOffset(0);
-    setAdjIdx(null);
     setSlideAnimate(false);
     commitRef.current = null;
     isAnimating.current = false;
   };
 
-  // Programmatic slide (used by timer and keyboard). Two rAFs ensure adj card
-  // renders at its off-screen position BEFORE the CSS transition kicks in.
+  // Programmatic slide used by auto-advance timer.
+  // Two rAFs ensure state renders at offset=0 before transition kicks in.
   const triggerSlide = (dir: 1 | -1) => {
-    const cur = currentIdxRef.current;
-    const total = nRef.current;
-    if (total === 0 || isAnimating.current) return;
-    const next = dir === 1 ? (cur + 1) % total : (cur - 1 + total) % total;
+    if (nRef.current === 0 || isAnimating.current) return;
     isAnimating.current = true;
     commitRef.current = dir === 1 ? "next" : "prev";
-    adjIdxRef.current = next;
-    setAdjIdx(next);
-    setAdjDir(dir);
     setSlideOffset(0);
     setSlideAnimate(false);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setSlideAnimate(true);
-        setSlideOffset(-dir * cardWidthRef.current);
+        setSlideOffset(-dir * vpWRef.current);
       });
     });
   };
@@ -172,7 +154,6 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   useEffect(() => {
     setCurrentIdx(0);
     setSlideOffset(0);
-    setAdjIdx(null);
     setSlideAnimate(false);
     isAnimating.current = false;
     commitRef.current = null;
@@ -195,19 +176,6 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     if (!isDragging.current || dragStartX.current === null) return;
     const delta = e.clientX - dragStartX.current;
     dragDeltaRef.current = delta;
-
-    // Show the adjacent card as soon as the drag has a clear direction
-    if (nRef.current > 0 && Math.abs(delta) > 5) {
-      const dir: 1 | -1 = delta < 0 ? 1 : -1;
-      const cur = currentIdxRef.current;
-      const total = nRef.current;
-      const next = dir === 1 ? (cur + 1) % total : (cur - 1 + total) % total;
-      if (adjIdxRef.current !== next) {
-        adjIdxRef.current = next;
-        setAdjIdx(next);
-        setAdjDir(dir);
-      }
-    }
     setSlideOffset(delta);
   };
 
@@ -216,39 +184,26 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     isDragging.current = false;
     const delta = dragDeltaRef.current;
     dragStartX.current = null;
-    const total = nRef.current;
-    const cur = currentIdxRef.current;
-    const w = cardWidthRef.current;
+    const w = vpWRef.current;
 
     if (Math.abs(delta) < 8) {
-      // Treat as tap — snap back and dismiss
+      // Tap — snap back and dismiss
       setSlideAnimate(true);
       setSlideOffset(0);
-      setTimeout(() => setAdjIdx(null), 450);
       onTap();
       restartTimer();
       return;
     }
 
     setSlideAnimate(true);
-    if (delta < -SLIDE_THRESHOLD && total > 0) {
-      // Commit next
-      const next = (cur + 1) % total;
+    if (delta < -SLIDE_THRESHOLD && nRef.current > 0) {
       isAnimating.current = true;
       commitRef.current = "next";
-      adjIdxRef.current = next;
-      setAdjIdx(next);
-      setAdjDir(1);
       setSlideOffset(-w);
       restartTimer();
-    } else if (delta > SLIDE_THRESHOLD && total > 0) {
-      // Commit prev
-      const prev = (cur - 1 + total) % total;
+    } else if (delta > SLIDE_THRESHOLD && nRef.current > 0) {
       isAnimating.current = true;
       commitRef.current = "prev";
-      adjIdxRef.current = prev;
-      setAdjIdx(prev);
-      setAdjDir(-1);
       setSlideOffset(w);
       restartTimer();
     } else {
@@ -261,8 +216,13 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   // ── Render ────────────────────────────────────────────────────────────────
   if (!mounted) return null;
 
+  // Three carousel slots always rendered — prev and next are one full viewport
+  // width to the left/right so they sit just off-screen like an adjacent page.
+  const prevIdx = n > 0 ? (currentIdx - 1 + n) % n : 0;
+  const nextIdx = n > 0 ? (currentIdx + 1) % n : 0;
+  const prevSlide = n > 0 ? highlights[prevIdx] : null;
   const currentSlide = n > 0 ? highlights[currentIdx] : null;
-  const adjSlide = adjIdx !== null && adjIdx >= 0 && adjIdx < n ? highlights[adjIdx] : null;
+  const nextSlide = n > 0 ? highlights[nextIdx] : null;
   const bgImageUrl = currentSlide?.image?.replace("http:", "https:") ?? "";
 
   const backdropStyle: React.CSSProperties = {
@@ -273,7 +233,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     transition: "opacity 0.35s ease",
   };
 
-  // Shared card geometry — position transitions handled here; slide handled via transform
+  // All three carousel cards share the same geometry — they're separated only
+  // by their translateX offset (multiples of vp.w).
   const baseCardStyle: React.CSSProperties = {
     position: "fixed",
     overflow: "hidden",
@@ -284,6 +245,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     left: geom.left,
     width: geom.width,
     height: geom.height,
+    // Position/size spring for expand/collapse; transform for slide
     transition: slideAnimate
       ? `transform ${SLIDE_DURATION}, top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`
       : `top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
@@ -294,8 +256,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     objectFit: "contain", background: "#111",
     userSelect: "none", pointerEvents: "none",
     display: "block",
-    draggable: false,
-  } as React.CSSProperties;
+  };
 
   // Outside working hours: black fullscreen overlay, cannot be dismissed
   if (!isWorkingHours) {
@@ -330,26 +291,33 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         />
       )}
 
-      {/* Adjacent card — enters from off-screen, sits behind current card */}
-      {adjSlide && (
+      {/* Prev card — one full viewport width to the left, always present */}
+      {prevSlide && (
         <div style={{
           ...baseCardStyle,
           zIndex: 49,
           pointerEvents: "none",
-          // Base position is same as current card; offset by ±cardWidth so it starts off-screen
-          transform: `translateX(${adjDir * geom.wNum + slideOffset}px)`,
+          transform: `translateX(${-vp.w + slideOffset}px)`,
         }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={adjSlide.image.replace("http:", "https:")}
-            alt={adjSlide.title}
-            draggable={false}
-            style={imgStyle}
-          />
+          <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} style={imgStyle} />
         </div>
       )}
 
-      {/* Current card — moves with finger/animation */}
+      {/* Next card — one full viewport width to the right, always present */}
+      {nextSlide && (
+        <div style={{
+          ...baseCardStyle,
+          zIndex: 49,
+          pointerEvents: "none",
+          transform: `translateX(${vp.w + slideOffset}px)`,
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} style={imgStyle} />
+        </div>
+      )}
+
+      {/* Current card — drag target, sits at center */}
       <div
         style={{
           ...baseCardStyle,
