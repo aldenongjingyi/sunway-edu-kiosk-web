@@ -259,7 +259,7 @@ export default function MapView({ destinationId, onClose }: Props) {
         control-active-bg-color="#6E96FF"
         control-active-fg-color="#ffffff"
         map-marker-end-bg-color="#00226B"
-        map-marker-connector-bg-color="#00226B"
+        map-marker-connector-bg-color="#6E96FF"
       />
     </div>
   );
