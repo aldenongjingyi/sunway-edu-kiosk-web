@@ -1,16 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "export",
+  assetPrefix: process.env.NODE_ENV === "production" ? "https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com" : "",
   devIndicators: false,
   reactStrictMode: false,
-  allowedDevOrigins: ["192.168.100.218"],
-  async headers() {
-    return [{
-      // Only apply no-store to page routes, NOT to /_next/static/ assets (CSS/JS)
-      source: "/((?!_next/static).*)",
-      headers: [{ key: "Cache-Control", value: "no-store" }],
-    }];
-  },
+  images: { unoptimized: true },
+  allowedDevOrigins: ["192.168.100.22"],
 };
 
 export default nextConfig;
