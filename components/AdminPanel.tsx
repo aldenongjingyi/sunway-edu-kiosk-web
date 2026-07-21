@@ -178,7 +178,7 @@ export default function AdminPanel({ onClose }: Props) {
             <p className="text-[12px] text-[#8e8e93] mb-3">Switch between the default iOS-style layout and the V1 airport-kiosk style layout. Takes effect immediately.</p>
             <div className="flex gap-2">
               <button
-                onClick={() => setDesign("default")}
+                onClick={() => { setDesign("default"); onClose(); }}
                 className="flex-1 py-3 rounded-xl text-[15px] font-medium border"
                 style={{
                   backgroundColor: design === "default" ? "var(--navy)" : "transparent",
@@ -189,7 +189,7 @@ export default function AdminPanel({ onClose }: Props) {
                 Default
               </button>
               <button
-                onClick={() => setDesign("v1")}
+                onClick={() => { setDesign("v1"); onClose(); }}
                 className="flex-1 py-3 rounded-xl text-[15px] font-medium border"
                 style={{
                   backgroundColor: design === "v1" ? "var(--navy)" : "transparent",
