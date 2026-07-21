@@ -16,11 +16,31 @@ const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 const WORKING_START_KEY = "admin.working.start";
 const WORKING_END_KEY   = "admin.working.end";
-const TABS = ["Popular Searches", "Facilities / Offices", "Departments / Staffs", "Events"] as const;
+
+const TABS_DEFAULT = ["Popular Searches", "Facilities / Offices", "Departments / Staffs", "Events"] as const;
+const TABS_V1 = ["Popular Searches", "Facilities / Offices", "Departments", "Events"] as const;
+const TAB_LINES_V1: string[][] = [
+  ["Popular", "Searches"],
+  ["Facilities /", "Offices"],
+  ["Departments"],
+  ["Events"],
+];
 
 // TODO: re-enable working hours enforcement before production deployment
 function checkWorkingHours(): boolean {
   return true; // disabled — always treat as working hours
+}
+
+function formatTimestamp(date: Date | null): string {
+  if (!date) return "—";
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const y = date.getFullYear();
+  const mo = String(date.getMonth()+1).padStart(2,"0");
+  const d = String(date.getDate()).padStart(2,"0");
+  const h = date.getHours() % 12 || 12;
+  const mi = String(date.getMinutes()).padStart(2,"0");
+  const ap = date.getHours() >= 12 ? "PM" : "AM";
+  return `${days[date.getDay()]} ${y}-${mo}-${d} ${h}:${mi} ${ap}`;
 }
 
 interface FloorOption {
@@ -30,7 +50,7 @@ interface FloorOption {
 }
 
 export default function KioskShell() {
-  const { loadData, loadStaff, locations, nodes, levels } = useDataStore();
+  const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, design } = useDataStore();
 
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
@@ -47,6 +67,8 @@ export default function KioskShell() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isV1 = design === "v1";
 
   // Load data on mount, expand screensaver once highlights are ready
   // Also reopen admin panel if we just reloaded after saving a kiosk node
@@ -193,16 +215,13 @@ export default function KioskShell() {
     handleClear();
   };
 
-  return (
-    <div className="h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
-
+  const overlays = (
+    <>
       {/* Screensaver overlay */}
       <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} isWorkingHours={withinWorkingHours} />
 
       {/* Admin panel */}
-      {showAdmin && <AdminPanel
-        onClose={() => { setShowAdmin(false); setQuery(""); }}
-      />}
+      {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); setQuery(""); }} />}
 
       {/* Map overlay — kept mounted once shown so it doesn't re-fetch on every open */}
       {mapMounted && <MapView destinationId={mapDestinationId} onClose={handleMapClose} />}
@@ -243,7 +262,7 @@ export default function KioskShell() {
             <div className="px-5 pt-5 pb-3 text-center">
               <p className="text-[17px] font-semibold text-black">To which floor?</p>
             </div>
-            {floorPicker.floors.map((floor, i) => (
+            {floorPicker.floors.map((floor) => (
               <div key={floor.levelId}>
                 <div style={{ borderTop: "0.5px solid #e5e5ea" }} />
                 <button
@@ -271,6 +290,80 @@ export default function KioskShell() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  const content = showResults ? (
+    <SearchResults
+      query={query}
+      filterCategory={filterCategory}
+      filterDepartment={filterDepartment}
+      onLocationSelect={handleLocationSelect}
+      onStaffSelect={handleStaffSelect}
+    />
+  ) : (
+    <>
+      {tab === 0 && <PopularTab onSelect={handlePopularSelect} />}
+      {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} />}
+      {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} />}
+      {tab === 3 && <EventsTab />}
+    </>
+  );
+
+  if (isV1) {
+    return (
+      <div className="h-full flex flex-col overflow-hidden" style={{ background: "var(--bg)" }} onPointerDown={resetIdle}>
+        {overlays}
+
+        {/* V1 Header: Navy bar with branding + search */}
+        <div className="v1-header">
+          <div className="v1-brand">
+            <span className="v1-brand-name">Sunway University</span>
+            <span className="v1-brand-sub">Campus Directory</span>
+          </div>
+          <div className="v1-search-row">
+            <input
+              ref={inputRef}
+              className="v1-search"
+              placeholder="Search facilities, offices, staff…"
+              value={query}
+              onChange={e => handleQueryChange(e.target.value)}
+              onFocus={resetIdle}
+            />
+            <button onClick={handleClear} className="v1-clear">Clear</button>
+          </div>
+        </div>
+
+        {/* V1 Tab bar */}
+        {!showResults && (
+          <div className="v1-tabs">
+            {TABS_V1.map((t, i) => (
+              <button key={t} className={`v1-tab${tab === i ? " active" : ""}`} onClick={() => handleTabChange(i)}>
+                {TAB_LINES_V1[i].map((line, li) => (
+                  <span key={li}>{line}{li < TAB_LINES_V1[i].length - 1 ? <br /> : null}</span>
+                ))}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {content}
+
+        {!showResults && (
+          <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
+            <p>Version 1.0 Build #14</p>
+            <p>-</p>
+            <p>Data {formatTimestamp(lastRefreshed)}</p>
+            <p>Since {formatTimestamp(lastStaffRefreshed)}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
+      {overlays}
 
       {/* Search bar */}
       <div className="flex items-center gap-2 px-4 pt-3 pb-2 flex-shrink-0">
@@ -295,7 +388,7 @@ export default function KioskShell() {
       {!showResults && (
         <div className="px-4 pb-3 flex-shrink-0">
           <div className="segment-control">
-            {TABS.map((t, i) => (
+            {TABS_DEFAULT.map((t, i) => (
               <button
                 key={t}
                 className={`segment-btn ${tab === i ? "active" : ""}`}
@@ -308,23 +401,7 @@ export default function KioskShell() {
         </div>
       )}
 
-      {/* Content area */}
-      {showResults ? (
-        <SearchResults
-          query={query}
-          filterCategory={filterCategory}
-          filterDepartment={filterDepartment}
-          onLocationSelect={handleLocationSelect}
-          onStaffSelect={handleStaffSelect}
-        />
-      ) : (
-        <>
-          {tab === 0 && <PopularTab onSelect={handlePopularSelect} />}
-          {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} />}
-          {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} />}
-          {tab === 3 && <EventsTab />}
-        </>
-      )}
+      {content}
 
       {/* Footer version info */}
       {!showResults && tab === 0 && (

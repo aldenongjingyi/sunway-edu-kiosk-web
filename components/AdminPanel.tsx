@@ -21,7 +21,7 @@ function minutesToTime(mins: number): string {
 }
 
 export default function AdminPanel({ onClose }: Props) {
-  const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, lastRefreshed, lastStaffRefreshed, loadData, loadStaff } = useDataStore();
+  const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, lastRefreshed, lastStaffRefreshed, loadData, loadStaff, design, setDesign } = useDataStore();
 
   const [workingStart, setWorkingStart] = useState(() =>
     minutesToTime(parseInt(localStorage?.getItem(WORKING_START_KEY) ?? "450")) // 7:30
@@ -170,6 +170,36 @@ export default function AdminPanel({ onClose }: Props) {
             {cacheStatus && (
               <p className="text-center text-[13px] text-[#6b6b6b] mt-2 fade-in">{cacheStatus}</p>
             )}
+          </section>
+
+          {/* UI Design */}
+          <section>
+            <p className="text-[12px] font-semibold text-[#6b6b6b] uppercase tracking-wide mb-1">UI Design</p>
+            <p className="text-[12px] text-[#8e8e93] mb-3">Switch between the default iOS-style layout and the V1 airport-kiosk style layout. Takes effect immediately.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDesign("default")}
+                className="flex-1 py-3 rounded-xl text-[15px] font-medium border"
+                style={{
+                  backgroundColor: design === "default" ? "var(--navy)" : "transparent",
+                  color: design === "default" ? "#fff" : "var(--navy)",
+                  borderColor: "var(--navy)",
+                }}
+              >
+                Default
+              </button>
+              <button
+                onClick={() => setDesign("v1")}
+                className="flex-1 py-3 rounded-xl text-[15px] font-medium border"
+                style={{
+                  backgroundColor: design === "v1" ? "var(--navy)" : "transparent",
+                  color: design === "v1" ? "#fff" : "var(--navy)",
+                  borderColor: "var(--navy)",
+                }}
+              >
+                V1 (Airport)
+              </button>
+            </div>
           </section>
 
           {/* Map integration */}

@@ -14,9 +14,13 @@ interface DataStore {
   staffLoaded: boolean;
   lastRefreshed: Date | null;
   lastStaffRefreshed: Date | null;
+  design: "default" | "v1";
+  setDesign: (d: "default" | "v1") => void;
   loadData: () => Promise<void>;
   loadStaff: () => Promise<void>;
 }
+
+const DESIGN_KEY = "admin.design";
 
 async function fetchGzip(url: string): Promise<unknown> {
   const res = await fetch(`https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}`);
@@ -36,6 +40,11 @@ export const useDataStore = create<DataStore>((set, get) => ({
   staffLoaded: false,
   lastRefreshed: null,
   lastStaffRefreshed: null,
+  design: (typeof window !== "undefined" ? (localStorage.getItem(DESIGN_KEY) ?? "default") : "default") as "default" | "v1",
+  setDesign: (d) => {
+    if (typeof window !== "undefined") localStorage.setItem(DESIGN_KEY, d);
+    set({ design: d });
+  },
 
   loadData: async () => {
     if (get().loaded) return;
