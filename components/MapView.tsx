@@ -148,12 +148,12 @@ export default function MapView({ destinationId, onClose }: Props) {
           const sp = d?.startNode?.point;
           const ep = d?.endNode?.point;
           if (sf && ef && sp && ep && isFinite(sp.x) && isFinite(sp.y) && isFinite(ep.x) && isFinite(ep.y)) {
-            const epx = ep.x, epy = ep.y;
+            const spx = sp.x, spy = sp.y;
             setTimeout(() => {
               try {
                 const el = map as HTMLElement & { setFloor: (c: string) => void; centerOn: (x: number, y: number, o?: object) => void };
-                el.setFloor(ef);
-                el.centerOn(epx, epy, { animate: true, scale: 3 });
+                el.setFloor(sf);
+                el.centerOn(spx, spy, { animate: true, scale: 3 });
               } catch (_) {}
             }, 0);
           }
@@ -260,6 +260,7 @@ export default function MapView({ destinationId, onClose }: Props) {
         control-active-fg-color="#ffffff"
         map-marker-end-bg-color="#00226B"
         map-marker-connector-bg-color="#6E96FF"
+        map-label-background-color="transparent"
       />
     </div>
   );

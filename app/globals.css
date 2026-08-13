@@ -86,12 +86,13 @@ html, body {
 .card-press:active { transform: scale(0.96); }
 
 .chevron {
-  width: 7px;
-  height: 12px;
+  width: 8px;
+  height: 8px;
   border-right: 2px solid #c7c7cc;
   border-top: 2px solid #c7c7cc;
   transform: rotate(45deg);
   flex-shrink: 0;
+  margin-right: 4px;
 }
 
 .divider { height: 0.5px; background: var(--divider); margin-left: 60px; }
