@@ -81,14 +81,16 @@ export const useDataStore = create<DataStore>((set, get) => ({
           return { ...l, categories_, levelTitles };
         });
 
-      // Filter highlights
+      // Filter highlights — parse date-only strings as local midnight (appending T00:00:00
+      // avoids JS treating YYYY-MM-DD as UTC, which breaks filtering on UTC-offset devices)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const localDate = (s: string) => new Date(s.length === 10 ? s + "T00:00:00" : s);
       const highlights = (data.kiosklights as Highlight[]).filter(h => {
-        const display = new Date(h.display_at);
-        const end = new Date(h.end_at);
+        const display = localDate(h.display_at);
+        const end = localDate(h.end_at);
         return today >= display && end > today;
-      }).sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+      }).sort((a, b) => localDate(a.start_at).getTime() - localDate(b.start_at).getTime());
 
       set({
         levels: levelsMap,
