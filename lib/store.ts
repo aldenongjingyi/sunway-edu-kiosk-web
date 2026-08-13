@@ -23,7 +23,8 @@ interface DataStore {
 const DESIGN_KEY = "admin.design";
 
 async function fetchGzip(url: string): Promise<unknown> {
-  const res = await fetch(`https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}`);
+  const bust = `&_=${Date.now()}`;
+  const res = await fetch(`https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}${bust}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Failed to fetch ${url}`);
   return res.json();
 }
@@ -89,7 +90,7 @@ export const useDataStore = create<DataStore>((set, get) => ({
       const highlights = (data.kiosklights as Highlight[]).filter(h => {
         const display = localDate(h.display_at);
         const end = localDate(h.end_at);
-        return today >= display && end > today;
+        return today >= display && end >= today;
       }).sort((a, b) => localDate(a.start_at).getTime() - localDate(b.start_at).getTime());
 
       set({
