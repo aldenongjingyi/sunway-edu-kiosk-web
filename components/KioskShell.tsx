@@ -12,6 +12,7 @@ import MapView from "./MapView";
 import type { Category, Staff } from "@/lib/types";
 
 const IDLE_SECONDS = 20;
+const RELOAD_INTERVAL_MS = 15 * 60 * 1000; // reload every 15 minutes while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 const WORKING_START_KEY = "admin.working.start";
@@ -90,6 +91,13 @@ export default function KioskShell() {
     const interval = setInterval(check, 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  // Periodic reload — only fires while screensaver is expanded (user idle)
+  useEffect(() => {
+    if (!screensaverExpanded) return;
+    const id = setTimeout(() => window.location.reload(), RELOAD_INTERVAL_MS);
+    return () => clearTimeout(id);
+  }, [screensaverExpanded]);
 
   // Reset idle timer
   const resetIdle = useCallback(() => {
