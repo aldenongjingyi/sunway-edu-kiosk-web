@@ -48,13 +48,10 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ratioSetRef = useRef(false);
   const isExpandedRef = useRef(isExpanded);
-  const slideDistRef = useRef(isExpanded ? 0 : THUMB_PX); // slide distance: vp.w when expanded, thumb width when collapsed
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { nRef.current = n; }, [n]);
-  useEffect(() => {
-    isExpandedRef.current = isExpanded;
-    slideDistRef.current = isExpanded ? vpWRef.current : THUMB_PX;
-  }, [isExpanded]);
+  useEffect(() => { isExpandedRef.current = isExpanded; }, [isExpanded]);
 
   const [imageRatio, setImageRatio] = useState(1.35);
   const [mounted, setMounted] = useState(false);
@@ -140,6 +137,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   // Two rAFs ensure state renders at offset=0 before transition kicks in.
   const triggerSlide = (dir: 1 | -1) => {
     if (nRef.current === 0 || isAnimating.current) return;
+    const w = containerRef.current?.offsetWidth ?? vpWRef.current;
     isAnimating.current = true;
     commitRef.current = dir === 1 ? "next" : "prev";
     setSlideOffset(0);
@@ -147,7 +145,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setSlideAnimate(true);
-        setSlideOffset(-dir * slideDistRef.current);
+        setSlideOffset(-dir * w);
       });
     });
   };
@@ -190,7 +188,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     isDragging.current = false;
     const delta = dragDeltaRef.current;
     dragStartX.current = null;
-    const w = vpWRef.current;
+    const w = containerRef.current?.offsetWidth ?? vpWRef.current;
 
     if (Math.abs(delta) < 8) {
       // Tap — snap back and dismiss
@@ -239,26 +237,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     transition: "opacity 0.35s ease",
   };
 
-  // All three carousel cards share the same geometry — they're separated only
-  // by their translateX offset (multiples of vp.w).
-  const baseCardStyle: React.CSSProperties = {
-    position: "fixed",
-    overflow: "hidden",
-    borderRadius: geom.borderRadius,
-    boxShadow: SHADOW,
-    background: "#111",
-    top: geom.top,
-    left: geom.left,
-    width: geom.width,
-    height: geom.height,
-    // Position/size spring for expand/collapse; transform for slide
-    transition: slideAnimate
-      ? `transform ${SLIDE_DURATION}, top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`
-      : `top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
-  };
-
   const imgStyle: React.CSSProperties = {
-    width: "100%", height: "100%",
+    position: "absolute", top: 0, width: "100%", height: "100%",
     objectFit: "contain", background: "#111",
     userSelect: "none", pointerEvents: "none",
     display: "block",
@@ -297,70 +277,67 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         />
       )}
 
-      {/* Prev/next cards — offset by thumbnail width when collapsed, viewport width when expanded */}
-      {prevSlide && (
-        <div style={{
-          ...baseCardStyle,
-          zIndex: 49,
-          pointerEvents: "none",
-          overflow: "hidden",
-          transform: `translateX(${-(isExpanded ? vp.w : THUMB_PX) + slideOffset}px)`,
-        }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} style={imgStyle} />
-        </div>
-      )}
-
-      {nextSlide && (
-        <div style={{
-          ...baseCardStyle,
-          zIndex: 49,
-          pointerEvents: "none",
-          overflow: "hidden",
-          transform: `translateX(${(isExpanded ? vp.w : THUMB_PX) + slideOffset}px)`,
-        }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} style={imgStyle} />
-        </div>
-      )}
-
-      {/* Current card — drag target, sits at center */}
+      {/* Single container — overflow:hidden clips carousel to card bounds */}
       <div
+        ref={containerRef}
         style={{
-          ...baseCardStyle,
+          position: "fixed",
+          top: geom.top, left: geom.left,
+          width: geom.width, height: geom.height,
+          borderRadius: geom.borderRadius,
+          boxShadow: SHADOW,
+          background: "#111",
+          overflow: "hidden",
           zIndex: 50,
           cursor: "grab",
           touchAction: "none",
-          transform: `translateX(${slideOffset}px)`,
+          transition: `top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onTransitionEnd={handleSlideEnd}
       >
-        {currentSlide ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentSlide.image.replace("http:", "https:")}
-            alt={currentSlide.title}
-            draggable={false}
-            onLoad={(e) => {
-              if (!ratioSetRef.current) {
-                const img = e.currentTarget;
-                if (img.naturalWidth > 0) {
-                  ratioSetRef.current = true;
-                  setImageRatio(img.naturalHeight / img.naturalWidth);
+        {/* Inner slider — translates all images together */}
+        <div
+          style={{
+            position: "absolute", inset: 0,
+            transform: `translateX(${slideOffset}px)`,
+            transition: slideAnimate ? `transform ${SLIDE_DURATION}` : "none",
+          }}
+          onTransitionEnd={handleSlideEnd}
+        >
+          {prevSlide && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} style={{ ...imgStyle, left: "-100%" }} />
+          )}
+          {currentSlide ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={currentSlide.image.replace("http:", "https:")}
+              alt={currentSlide.title}
+              draggable={false}
+              onLoad={(e) => {
+                if (!ratioSetRef.current) {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth > 0) {
+                    ratioSetRef.current = true;
+                    setImageRatio(img.naturalHeight / img.naturalWidth);
+                  }
                 }
-              }
-            }}
-            style={imgStyle}
-          />
-        ) : (
-          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
-          </div>
-        )}
+              }}
+              style={{ ...imgStyle, left: 0 }}
+            />
+          ) : (
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
+            </div>
+          )}
+          {nextSlide && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} style={{ ...imgStyle, left: "100%" }} />
+          )}
+        </div>
       </div>
     </>,
     document.body
