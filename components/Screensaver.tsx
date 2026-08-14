@@ -48,9 +48,13 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ratioSetRef = useRef(false);
   const isExpandedRef = useRef(isExpanded);
+  const slideDistRef = useRef(isExpanded ? 0 : THUMB_PX); // slide distance: vp.w when expanded, thumb width when collapsed
 
   useEffect(() => { nRef.current = n; }, [n]);
-  useEffect(() => { isExpandedRef.current = isExpanded; }, [isExpanded]);
+  useEffect(() => {
+    isExpandedRef.current = isExpanded;
+    slideDistRef.current = isExpanded ? vpWRef.current : THUMB_PX;
+  }, [isExpanded]);
 
   const [imageRatio, setImageRatio] = useState(1.35);
   const [mounted, setMounted] = useState(false);
@@ -136,11 +140,6 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   // Two rAFs ensure state renders at offset=0 before transition kicks in.
   const triggerSlide = (dir: 1 | -1) => {
     if (nRef.current === 0 || isAnimating.current) return;
-    // When collapsed, advance index directly — no animation, no transitionend needed
-    if (!isExpandedRef.current) {
-      setCurrentIdx(i => dir === 1 ? (i + 1) % nRef.current : (i - 1 + nRef.current) % nRef.current);
-      return;
-    }
     isAnimating.current = true;
     commitRef.current = dir === 1 ? "next" : "prev";
     setSlideOffset(0);
@@ -148,7 +147,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setSlideAnimate(true);
-        setSlideOffset(-dir * vpWRef.current);
+        setSlideOffset(-dir * slideDistRef.current);
       });
     });
   };
@@ -298,25 +297,27 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         />
       )}
 
-      {/* Prev/next cards — only rendered when expanded; collapsed state just swaps the current image */}
-      {isExpanded && prevSlide && (
+      {/* Prev/next cards — offset by thumbnail width when collapsed, viewport width when expanded */}
+      {prevSlide && (
         <div style={{
           ...baseCardStyle,
           zIndex: 49,
           pointerEvents: "none",
-          transform: `translateX(${-vp.w + slideOffset}px)`,
+          overflow: "hidden",
+          transform: `translateX(${-(isExpanded ? vp.w : THUMB_PX) + slideOffset}px)`,
         }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} style={imgStyle} />
         </div>
       )}
 
-      {isExpanded && nextSlide && (
+      {nextSlide && (
         <div style={{
           ...baseCardStyle,
           zIndex: 49,
           pointerEvents: "none",
-          transform: `translateX(${vp.w + slideOffset}px)`,
+          overflow: "hidden",
+          transform: `translateX(${(isExpanded ? vp.w : THUMB_PX) + slideOffset}px)`,
         }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} style={imgStyle} />
@@ -330,7 +331,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
           zIndex: 50,
           cursor: "grab",
           touchAction: "none",
-          transform: isExpanded ? `translateX(${slideOffset}px)` : "none",
+          transform: `translateX(${slideOffset}px)`,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
