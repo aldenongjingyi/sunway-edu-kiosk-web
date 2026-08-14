@@ -291,8 +291,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         />
       )}
 
-      {/* Prev card — one full viewport width to the left, always present */}
-      {prevSlide && (
+      {/* Prev/next cards — only rendered when expanded; collapsed state just swaps the current image */}
+      {isExpanded && prevSlide && (
         <div style={{
           ...baseCardStyle,
           zIndex: 49,
@@ -304,8 +304,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         </div>
       )}
 
-      {/* Next card — one full viewport width to the right, always present */}
-      {nextSlide && (
+      {isExpanded && nextSlide && (
         <div style={{
           ...baseCardStyle,
           zIndex: 49,
@@ -324,7 +323,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
           zIndex: 50,
           cursor: "grab",
           touchAction: "none",
-          transform: `translateX(${slideOffset}px)`,
+          transform: isExpanded ? `translateX(${slideOffset}px)` : "none",
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
