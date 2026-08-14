@@ -47,8 +47,10 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const dragDeltaRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ratioSetRef = useRef(false);
+  const isExpandedRef = useRef(isExpanded);
 
   useEffect(() => { nRef.current = n; }, [n]);
+  useEffect(() => { isExpandedRef.current = isExpanded; }, [isExpanded]);
 
   const [imageRatio, setImageRatio] = useState(1.35);
   const [mounted, setMounted] = useState(false);
@@ -134,6 +136,11 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   // Two rAFs ensure state renders at offset=0 before transition kicks in.
   const triggerSlide = (dir: 1 | -1) => {
     if (nRef.current === 0 || isAnimating.current) return;
+    // When collapsed, advance index directly — no animation, no transitionend needed
+    if (!isExpandedRef.current) {
+      setCurrentIdx(i => dir === 1 ? (i + 1) % nRef.current : (i - 1 + nRef.current) % nRef.current);
+      return;
+    }
     isAnimating.current = true;
     commitRef.current = dir === 1 ? "next" : "prev";
     setSlideOffset(0);
