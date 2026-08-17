@@ -1,140 +1,173 @@
-# Sunway Edu Kiosk — Web App
+# Sunway Education Kiosk — Web App
 
-Interactive campus kiosk web app for Sunway University MyCampus. Runs as a fullscreen WebView on an Elo Android kiosk device.
-
----
-
-## How It Works
-
-### Code & Storage
-- Source code is mirrored to two GitHub remotes (`aldenongjingyi` and `map711`) on every push
-- The built app (static HTML/CSS/JS) is hosted on **DigitalOcean Spaces** (`kiosk-sunwayedu.getmallapp.com` bucket, `sgp1` region)
-
-### Deploy Flow
-1. Push to `main`
-2. GitHub Action triggers automatically — fetches wayfinder JS, runs `next build`, syncs `out/` to DO Spaces
-3. Or deploy manually: `node --env-file=.env.local scripts/deploy.mjs`
-
-### Runtime Flow (on the Elo)
-1. Android WebView loads `https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com/index.html`
-2. Next.js static app boots — CSS/JS assets load from the same DO Spaces path (via `assetPrefix`)
-3. Wayfinder map JS loads from `NEXT_PUBLIC_WAYFINDER_URL` (also DO Spaces)
-4. Campus data (`indoorcms.com`) and staff data (`izone.sunway.edu.my`) are fetched via a **Cloudflare Worker** (`sunway-kiosk-proxy.sunway-kiosk.workers.dev`) which handles CORS
-5. Map renders, screensaver runs, kiosk is live
-
-### Services
-| Service | Purpose |
-|---|---|
-| DigitalOcean Spaces | Hosts the static web app |
-| GitHub (×2) | Source control + auto-deploy trigger |
-| Cloudflare Worker | CORS proxy for campus/staff APIs |
-| ADB over WiFi | Dev access to the Elo kiosk device |
+Next.js 16 static export served to an Elo touchscreen kiosk running an Android WebView shell (`com.map72.sunwaykiosk`).
 
 ---
 
 ## Stack
 
-- **Next.js 16** (App Router, static export)
-- **React 19**, TypeScript, Tailwind CSS v4, Zustand
-
----
-
-## Setup
-
-### Prerequisites
-- Node.js 20+
-- A `.env.local` file (see below)
-
-### Environment Variables
-
-Create `.env.local` in the project root:
-
-```env
-DO_SPACES_KEY=your_key
-DO_SPACES_SECRET=your_secret
-DO_SPACES_REGION=sgp1
-DO_SPACES_BUCKET=kiosk-sunwayedu.getmallapp.com
-DO_SPACES_PATH=
-NEXT_PUBLIC_WAYFINDER_URL=https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com/wayfinder-map.min.js
-```
-
-### Install & Run Dev Server
-
-```bash
-npm install
-npm run dev
-```
-
-### Deploy to DO Spaces
-
-```bash
-node --env-file=.env.local scripts/deploy.mjs
-```
-
-### GitHub Secrets (for auto-deploy)
-
-Add these to `aldenongjingyi/sunway-edu-kiosk-web` → Settings → Secrets → Actions:
-
-| Secret | Value |
+| Layer | Technology |
 |---|---|
-| `DO_SPACES_KEY` | DO Spaces access key |
-| `DO_SPACES_SECRET` | DO Spaces secret |
-| `DO_SPACES_REGION` | `sgp1` |
-| `DO_SPACES_BUCKET` | `kiosk-sunwayedu.getmallapp.com` |
-| `DO_SPACES_PATH` | (leave empty) |
+| Framework | Next.js 16.2.6, React 19.2.4, TypeScript |
+| Styling | Tailwind CSS |
+| State | Zustand |
+| Output | Static export (`output: "export"`) |
+| Hosting (prod) | DigitalOcean Spaces CDN |
+| Hosting (staging) | Vercel |
+| Android shell | Kotlin WebView (`cacheMode = LOAD_NO_CACHE`) |
 
 ---
 
-## Elo Kiosk (ADB)
+## Architecture
 
-Connect to the Elo device over WiFi:
-
-```bash
-~/Library/Android/sdk/platform-tools/adb connect 192.168.100.222:5555
+```
+IndoorCMS API ─────┐
+                   ▼
+            CORS Proxy (CF Worker)
+                   │
+                   ▼
+           Zustand store (lib/store.ts)
+           ├── on success → save to localStorage cache
+           └── on failure → load from localStorage cache
+                   │
+                   ▼
+              React UI
 ```
 
-If the IP has changed: run `arp -a` and try each IP on port 5555.
+- **CORS proxy**: `https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=<encoded>`
+- **Campus data**: `https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz`
+- **Staff data**: `https://izone.sunway.edu.my/segfeeds/staff/mycampus/<token>`
+- API calls always include `&_=<timestamp>` to bust CDN/proxy caches
+- Data is **never filtered by device time** — all filtering uses API-provided fields only
 
-Restart the kiosk app:
-```bash
-adb -s 192.168.100.222:5555 shell am force-stop com.map72.sunwaykiosk
-adb -s 192.168.100.222:5555 shell am start -n com.map72.sunwaykiosk/.MainActivity
-```
+---
+
+## Data Flow
+
+### Online
+1. `fetchGzip(url)` fetches via CORS proxy with `cache: "no-store"`
+2. On success: save raw JSON to `localStorage` (`kiosk.data.cache` / `kiosk.staff.cache`)
+3. Process data into Zustand store → UI reads from store
+4. `lastRefreshed` set to `new Date()`
+
+### Offline / API failure
+1. Load from `localStorage` cache
+2. Process same way into Zustand store → UI unchanged
+3. `lastRefreshed` set to `null` → "cached version" watermark shown at bottom of screen
+
+### Refresh
+- **Pull-to-refresh**: swipe down anywhere → calls `refreshData()` (force re-fetches both campus + staff)
+- **Admin panel**: "Refresh API Data" button → same `refreshData()`
+- **Periodic**: soft refresh triggered when screensaver is expanded (idle state)
+
+---
+
+## Key Files
+
+| File | Purpose |
+|---|---|
+| `app/page.tsx` | Entry point → renders `<KioskShell />` |
+| `components/KioskShell.tsx` | Main shell — all state (tab, search, map, screensaver, admin, pull-to-refresh) |
+| `components/MapView.tsx` | Wayfinder indoor map embed |
+| `components/Screensaver.tsx` | Idle overlay — static (n=1) or carousel (n≥2), nothing if n=0 |
+| `components/AdminPanel.tsx` | Admin settings (triggered by typing `my3245campusx`) |
+| `lib/store.ts` | Zustand store — data loading, caching, design toggle |
+| `lib/types.ts` | TypeScript types |
+| `next.config.ts` | Static export config, conditional `assetPrefix` |
+| `scripts/deploy.mjs` | Deploy script → DO Spaces |
+
+---
+
+## Screensaver Behaviour
+
+| Highlights count | Behaviour |
+|---|---|
+| 0 | Nothing rendered |
+| 1 | Static image — no carousel, no auto-advance |
+| ≥2 | Swipeable carousel, auto-advances every 5 s |
+
+Outside working hours: black fullscreen overlay that cannot be dismissed.
 
 ---
 
 ## Admin Panel
 
-Access: tap the version string 5 times → enter password `my3245campusx`
+Trigger: type `my3245campusx` into the search bar.
 
-- **Data Status** — shows loaded record counts and last fetch times
-- **Working Hours** — configures the lockscreen schedule (currently disabled)
-- **Refresh API Data** — re-fetches campus and staff data
-- **Map Integration** — select which kiosk node this device represents (saves to `localStorage`)
+Settings stored in `localStorage`:
 
----
-
-## TODO (Before Production)
-- Evaluate replacing Cloudflare Worker with DO Functions to consolidate to a single provider
-- Enable static website hosting on DO Spaces so the root URL works without `/index.html`
+| Key | Default | Purpose |
+|---|---|---|
+| `admin.design` | `"default"` | UI layout (`"default"` or `"v1"`) |
+| `admin.kiosk.nodeId` | `""` | Kiosk node ID for Wayfinder "you are here" |
+| `admin.working.start` | `450` (7:30) | Working hours start (minutes from midnight) |
+| `admin.working.end` | `1170` (19:30) | Working hours end (minutes from midnight) |
 
 ---
 
-## Switching Branches on the Elo
+## Asset Prefix Logic
 
-DO Spaces always serves whatever was last deployed. Both `main` and `design/v1` build to the same bucket — whichever was deployed most recently is what the Elo loads.
-
-**Deploy `design/v1`:**
-```bash
-git checkout design/v1
-node --env-file=.env.local scripts/deploy.mjs
-git checkout main
+```ts
+// next.config.ts
+assetPrefix: (process.env.LOCAL_BUILD || process.env.VERCEL || process.env.NODE_ENV !== "production")
+  ? ""
+  : "https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com"
 ```
 
-**Switch back to `main`:**
-```bash
-git checkout main
+- Vercel and local builds get an empty prefix (serve their own assets)
+- DO Spaces production builds use the CDN prefix
+
+---
+
+## Deployment
+
+### Staging (Vercel)
+```sh
+vercel build
+vercel deploy --prebuilt
+vercel promote <deployment-url>
+```
+
+### Production (DO Spaces)
+```sh
 node --env-file=.env.local scripts/deploy.mjs
 ```
 
-The Elo will pick up the change on next app restart (or force-stop + start via ADB).
+### Git
+```sh
+git push origin --all   # pushes to both aldenongjingyi and map711 remotes
+```
+
+---
+
+## Android Shell
+
+- Package: `com.map72.sunwaykiosk`
+- `cacheMode = WebSettings.LOAD_NO_CACHE` — always loads fresh HTML/JS, prevents stale WebView cache
+- On load error: shows `offline.html`, retries every 5 s
+- Back button swallowed (kiosk cannot be exited)
+- Fullscreen immersive sticky mode
+
+---
+
+## Wayfinder Map API
+
+```js
+navigateTo({ from: locationId, to: locationId })  // route between two locations
+focusLocation(id)                                  // pan to location (no route)
+resetView()                                        // clear route and reset camera
+setFloor(floorId)                                  // switch floor
+// Note: centerOn() is a no-op while a route is active — use resetView() instead
+```
+
+- Kiosk node ID stored in `admin.kiosk.nodeId` drives the `you-are-here-node-id` attribute
+- Route mode: `lift`
+
+---
+
+## Browser Target
+
+```
+chrome >= 87
+android >= 87
+```
