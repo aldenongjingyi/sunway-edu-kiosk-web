@@ -318,3 +318,67 @@ Then redeploy the Worker.
 - `"loading"` — shows gray circle + person icon, image rendered at `opacity: 0`
 - `"loaded"` — image fades in (`opacity: 1`), gray circle hidden
 - `"error"` — shows gray circle + person icon (same as no `src`)
+
+---
+
+### HyperDX not receiving events — GitHub Actions overwriting deploy without API key
+
+**Symptom**: HyperDX shows no events after a `git push`, even though the local deploy worked fine and events were visible before pushing.
+
+**Root cause**: `.github/workflows/deploy.yml` triggers on every push to `main` and runs `node scripts/deploy.mjs` without `NEXT_PUBLIC_HYPERDX_API_KEY` in its environment. GitHub Actions rebuilds the app and overwrites DO Spaces with a build where the API key is undefined — silently breaking HyperDX init.
+
+This was compounded by a Turbopack behaviour: `process.env.NEXT_PUBLIC_*` is only statically inlined when the module ends up in a client-only chunk. When small code changes shift the module into a shared (server+client) chunk, the env var falls back to a runtime process polyfill that resolves to `undefined` in the browser.
+
+**Fix**: hardcode the HyperDX API key directly in `lib/hdx.ts`. It is a browser telemetry key — it is intentionally public, visible to anyone in DevTools, and has no elevated privileges. There is no security benefit to keeping it in an env var.
+
+```ts
+HyperDX.init({
+  apiKey: "8b23c3a0-4a71-41d8-bf96-a8fbf2490313",
+  ...
+});
+```
+
+**Alternative** (if you want to keep it in env): add `NEXT_PUBLIC_HYPERDX_API_KEY` to the repo's GitHub Secrets and pass it in `deploy.yml`:
+```yaml
+- run: node scripts/deploy.mjs
+  env:
+    NEXT_PUBLIC_HYPERDX_API_KEY: ${{ secrets.NEXT_PUBLIC_HYPERDX_API_KEY }}
+    # ...other vars
+```
+
+---
+
+### HyperDX flooded with `resourceFetch` spans — auto-instrumentation noise
+
+**Symptom**: HyperDX is full of `resourceFetch`, `documentFetch`, and `documentLoad` events, drowning out `ui.*` tracking events. The Wayfinder map triggers a burst of ~20 `resourceFetch` spans every time it loads map tiles.
+
+**Root cause**: The HyperDX SDK ships with several auto-instrumentation layers enabled by default:
+
+| Instrumentation key | What it emits | Source |
+|---|---|---|
+| `document` | `documentLoad`, `documentFetch`, `resourceFetch` (initial page load) | PerformanceTiming API |
+| `postload` | `resourceFetch` (ongoing — every JS/CSS/image after load) | PerformanceObserver |
+| `fetch` | span per `fetch()` call | Monkey-patched `window.fetch` |
+| `xhr` | span per `XMLHttpRequest` | Monkey-patched `XMLHttpRequest` |
+
+`tracePropagationTargets: []` only controls which requests receive the `traceparent` header — it does **not** disable span creation. Setting it to `[]` does not stop the flood.
+
+**Fix**: explicitly disable all auto-instrumentation in `lib/hdx.ts`:
+
+```ts
+HyperDX.init({
+  ...
+  tracePropagationTargets: [],
+  instrumentations: {
+    document: false,   // kills documentLoad/documentFetch/resourceFetch (page load)
+    postload: false,   // kills resourceFetch (ongoing resources, e.g. wayfinder map tiles)
+    fetch: false,      // kills fetch() spans
+    xhr: false,        // kills XHR spans
+    interactions: false,
+    longtask: false,
+    webvitals: false,
+  },
+});
+```
+
+After this, HyperDX only receives events explicitly sent via `hdx.addAction()`.

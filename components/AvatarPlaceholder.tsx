@@ -33,7 +33,7 @@ export default function AvatarPlaceholder({ src, name }: { src?: string; name?: 
         className="w-11 h-11 rounded-full object-cover border border-gray-200"
         style={{ opacity: status === "loaded" ? 1 : 0 }}
         onLoad={() => setStatus("loaded")}
-        onError={() => setStatus("error")}
+        onError={(e) => { e.nativeEvent.stopPropagation(); setStatus("error"); }}
       />
     </div>
   );
