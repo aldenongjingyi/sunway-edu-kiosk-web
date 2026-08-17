@@ -86,7 +86,7 @@ IndoorCMS API ─────┐
 | 1 | Static image — no carousel, no auto-advance |
 | ≥2 | Swipeable carousel, auto-advances every 5 s |
 
-Outside working hours: black fullscreen overlay that cannot be dismissed.
+Working hours scheduling is handled by Hexnode MDM — not the web app.
 
 ---
 
@@ -94,14 +94,21 @@ Outside working hours: black fullscreen overlay that cannot be dismissed.
 
 Trigger: type `my3245campusx` into the search bar.
 
-Settings stored in `localStorage`:
+The admin panel exposes **only kiosk node provisioning** — no other settings. This prevents students from tampering with kiosk behaviour.
 
-| Key | Default | Purpose |
+| Key | Storage | Purpose |
 |---|---|---|
-| `admin.design` | `"default"` | UI layout (`"default"` or `"v1"`) |
-| `admin.kiosk.nodeId` | `""` | Kiosk node ID for Wayfinder "you are here" |
-| `admin.working.start` | `450` (7:30) | Working hours start (minutes from midnight) |
-| `admin.working.end` | `1170` (19:30) | Working hours end (minutes from midnight) |
+| `admin.kiosk.nodeId` | `localStorage` | Kiosk node ID for Wayfinder "you are here" — set once per device |
+
+### Hardcoded settings (change in source, not via UI)
+
+These are intentionally not in any UI. To change them, edit `components/KioskShell.tsx` and redeploy:
+
+| Constant | Location | Default | Purpose |
+|---|---|---|---|
+| `DESIGN` | `KioskShell.tsx` | `"default"` | UI layout — `"default"` (iOS-style) or `"v1"` (airport-kiosk style) |
+| `IDLE_SECONDS` | `KioskShell.tsx` | `20` | Seconds of inactivity before screensaver expands |
+| `RELOAD_INTERVAL_MS` | `KioskShell.tsx` | `900000` (15 min) | How often data auto-refreshes while screensaver is active |
 
 ---
 

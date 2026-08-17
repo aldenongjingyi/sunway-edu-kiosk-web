@@ -5,7 +5,7 @@ import type { Category } from "@/lib/types";
 export default function FacilitiesTab({ onSelect }: { onSelect: (c: Category) => void }) {
   const categories = useDataStore(s => s.categories);
   const loaded = useDataStore(s => s.loaded);
-  const isV1 = useDataStore(s => s.design === "v1");
+  const isV1 = false; // design hardcoded in KioskShell.tsx
 
   const visible = Object.values(categories)
     .filter(c => !c.hidden && c.parent === null)

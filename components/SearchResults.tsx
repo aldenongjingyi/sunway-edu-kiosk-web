@@ -13,7 +13,7 @@ interface Props {
 
 export default function SearchResults({ query, filterCategory, filterDepartment, onLocationSelect, onStaffSelect }: Props) {
   const { locations, staffs } = useDataStore();
-  const isV1 = useDataStore(s => s.design === "v1");
+  const isV1 = false; // design hardcoded in KioskShell.tsx
   const q = query.toLowerCase().trim();
 
   // Filter locations

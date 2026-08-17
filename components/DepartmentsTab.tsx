@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 export default function DepartmentsTab({ onSelect }: { onSelect: (dept: string) => void }) {
   const { staffs, loadStaff, staffLoaded } = useDataStore();
-  const isV1 = useDataStore(s => s.design === "v1");
+  const isV1 = false; // design hardcoded in KioskShell.tsx
 
   useEffect(() => { loadStaff(); }, [loadStaff]);
 

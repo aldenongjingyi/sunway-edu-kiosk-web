@@ -6,7 +6,6 @@ import { useDataStore } from "@/lib/store";
 interface Props {
   isExpanded: boolean;
   onTap: () => void;
-  isWorkingHours: boolean;
 }
 
 // ─── SCREENSAVER VARIANT ───────────────────────────────────────────────────
@@ -25,7 +24,7 @@ const THUMB_PX = 120; // collapsed thumbnail width in px
 const SLIDE_THRESHOLD = 50; // min drag distance (px) to commit a slide
 const SLIDE_DURATION = "0.42s ease-out";
 
-export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props) {
+export default function Screensaver({ isExpanded, onTap }: Props) {
   const highlights = useDataStore(s => s.highlights);
   const n = highlights.length;
 
@@ -285,17 +284,6 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
 
   // No kiosklights — show nothing
   if (n === 0) return null;
-
-  // Outside working hours: black fullscreen overlay, cannot be dismissed
-  if (!isWorkingHours) {
-    return createPortal(
-      <div
-        style={{ position: "fixed", inset: 0, zIndex: 50, background: "#000", touchAction: "none" }}
-        onPointerDown={e => e.stopPropagation()}
-      />,
-      document.body
-    );
-  }
 
   return createPortal(
     <>

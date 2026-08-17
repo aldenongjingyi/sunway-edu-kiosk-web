@@ -15,14 +15,11 @@ interface DataStore {
   staffLoaded: boolean;
   lastRefreshed: Date | null;
   lastStaffRefreshed: Date | null;
-  design: "default" | "v1";
-  setDesign: (d: "default" | "v1") => void;
   loadData: (force?: boolean) => Promise<void>;
   loadStaff: (force?: boolean) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
-const DESIGN_KEY = "admin.design";
 const KIOSK_CACHE_KEY = "kiosk.data.cache";
 const STAFF_CACHE_KEY = "kiosk.staff.cache";
 
@@ -95,11 +92,6 @@ export const useDataStore = create<DataStore>((set, get) => ({
   staffLoaded: false,
   lastRefreshed: null,
   lastStaffRefreshed: null,
-  design: (typeof window !== "undefined" ? (localStorage.getItem(DESIGN_KEY) ?? "default") : "default") as "default" | "v1",
-  setDesign: (d) => {
-    if (typeof window !== "undefined") localStorage.setItem(DESIGN_KEY, d);
-    set({ design: d });
-  },
 
   loadData: async (force = false) => {
     if (get().loaded && !force) return;

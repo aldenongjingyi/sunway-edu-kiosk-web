@@ -15,8 +15,6 @@ const IDLE_SECONDS = 20;
 const RELOAD_INTERVAL_MS = 15 * 60 * 1000; // reload every 15 minutes while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
-const WORKING_START_KEY = "admin.working.start";
-const WORKING_END_KEY   = "admin.working.end";
 
 const TABS_DEFAULT = ["Popular Searches", "Facilities / Offices", "Departments / Staffs", "Events"] as const;
 const TABS_V1 = ["Popular Searches", "Facilities / Offices", "Departments", "Events"] as const;
@@ -27,10 +25,8 @@ const TAB_LINES_V1: string[][] = [
   ["Events"],
 ];
 
-// TODO: re-enable working hours enforcement before production deployment
-function checkWorkingHours(): boolean {
-  return true; // disabled — always treat as working hours
-}
+// UI design variant: "default" (iOS-style) or "v1" (airport-kiosk style)
+const DESIGN: "default" | "v1" = "default";
 
 function formatTimestamp(date: Date | null): string {
   if (!date) return "—";
@@ -51,14 +47,13 @@ interface FloorOption {
 }
 
 export default function KioskShell() {
-  const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, loaded, design } = useDataStore();
+  const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, loaded } = useDataStore();
 
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
   const [screensaverExpanded, setScreensaverExpanded] = useState(false);
-  const [withinWorkingHours, setWithinWorkingHours] = useState(true);
   const [showResults, setShowResults] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [mapDestinationId, setMapDestinationId] = useState<number | null>(null);
@@ -135,7 +130,7 @@ export default function KioskShell() {
   }, []);
   // ──────────────────────────────────────────────────────────────────────────
 
-  const isV1 = design === "v1";
+  const isV1 = DESIGN === "v1";
 
   // Load data on mount, expand screensaver once highlights are ready
   // Also reopen admin panel if we just reloaded after saving a kiosk node
@@ -149,14 +144,6 @@ export default function KioskShell() {
       setScreensaverExpanded(true);
     });
   }, [loadData, loadStaff]);
-
-  // Working hours check — runs every minute
-  useEffect(() => {
-    const check = () => setWithinWorkingHours(checkWorkingHours());
-    check();
-    const interval = setInterval(check, 60_000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Periodic data refresh — only fires while screensaver is expanded (user idle)
   useEffect(() => {
@@ -191,7 +178,6 @@ export default function KioskShell() {
   }, [resetIdle]);
 
   const handleScreensaverTap = () => {
-    if (!withinWorkingHours) return; // outside hours: black screen can't be dismissed
     setScreensaverExpanded(prev => !prev);
     resetIdle();
   };
@@ -337,7 +323,7 @@ export default function KioskShell() {
   const overlays = (
     <>
       {/* Screensaver overlay */}
-      <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} isWorkingHours={withinWorkingHours} />
+      <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} />
 
       {/* Admin panel */}
       {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); setQuery(""); }} />}
