@@ -15,8 +15,6 @@ const IDLE_SECONDS = 20;
 const RELOAD_INTERVAL_MS = 15 * 60 * 1000; // reload every 15 minutes while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
-const WORKING_START_KEY = "admin.working.start";
-const WORKING_END_KEY   = "admin.working.end";
 
 const TABS_DEFAULT = ["Popular Searches", "Facilities / Offices", "Departments / Staffs", "Events"] as const;
 const TABS_V1 = ["Popular Searches", "Facilities / Offices", "Departments", "Events"] as const;
@@ -27,10 +25,8 @@ const TAB_LINES_V1: string[][] = [
   ["Events"],
 ];
 
-// TODO: re-enable working hours enforcement before production deployment
-function checkWorkingHours(): boolean {
-  return true; // disabled — always treat as working hours
-}
+// UI design variant: "default" (iOS-style) or "v1" (airport-kiosk style)
+const DESIGN: "default" | "v1" = "default";
 
 function formatTimestamp(date: Date | null): string {
   if (!date) return "—";
@@ -51,14 +47,13 @@ interface FloorOption {
 }
 
 export default function KioskShell() {
-  const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, design } = useDataStore();
+  const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, loaded } = useDataStore();
 
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
   const [screensaverExpanded, setScreensaverExpanded] = useState(false);
-  const [withinWorkingHours, setWithinWorkingHours] = useState(true);
   const [showResults, setShowResults] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [mapDestinationId, setMapDestinationId] = useState<number | null>(null);
@@ -69,7 +64,73 @@ export default function KioskShell() {
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isV1 = design === "v1";
+  // ── Pull to refresh ────────────────────────────────────────────────────────
+  const PULL_THRESHOLD = 100;
+  const pullStartY = useRef<number | null>(null);
+  const pullProgressRef = useRef(0);
+  const isRefreshingRef = useRef(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pullBarRef = useRef<HTMLDivElement>(null);
+  const pullSpinnerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const setBarHeight = (h: number) => {
+      if (pullBarRef.current) pullBarRef.current.style.height = `${h}px`;
+    };
+
+    const onStart = (e: TouchEvent) => {
+      if (isRefreshingRef.current) return;
+      pullStartY.current = e.touches[0].clientY;
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (pullStartY.current === null || isRefreshingRef.current) return;
+      const delta = e.touches[0].clientY - pullStartY.current;
+      if (delta <= 0) { setBarHeight(0); pullProgressRef.current = 0; return; }
+      e.preventDefault();
+      const progress = Math.min(delta / PULL_THRESHOLD, 1);
+      pullProgressRef.current = progress;
+      setBarHeight(progress * 48);
+      if (pullSpinnerRef.current) {
+        pullSpinnerRef.current.style.transform = `rotate(${progress * 270}deg)`;
+        pullSpinnerRef.current.style.opacity = String(progress);
+      }
+    };
+
+    const onEnd = () => {
+      if (pullStartY.current === null) return;
+      pullStartY.current = null;
+      const committed = pullProgressRef.current >= 1;
+      pullProgressRef.current = 0;
+      setBarHeight(0);
+      if (pullSpinnerRef.current) {
+        pullSpinnerRef.current.style.transform = "";
+        pullSpinnerRef.current.style.opacity = "0";
+      }
+      if (committed && !isRefreshingRef.current) {
+        isRefreshingRef.current = true;
+        setIsRefreshing(true);
+        useDataStore.getState().refreshData().then(() => {
+          isRefreshingRef.current = false;
+          setIsRefreshing(false);
+        });
+      }
+    };
+
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd, { passive: true });
+    window.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const isV1 = DESIGN === "v1";
 
   // Load data on mount, expand screensaver once highlights are ready
   // Also reopen admin panel if we just reloaded after saving a kiosk node
@@ -84,18 +145,10 @@ export default function KioskShell() {
     });
   }, [loadData, loadStaff]);
 
-  // Working hours check — runs every minute
-  useEffect(() => {
-    const check = () => setWithinWorkingHours(checkWorkingHours());
-    check();
-    const interval = setInterval(check, 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Periodic reload — only fires while screensaver is expanded (user idle)
+  // Periodic data refresh — only fires while screensaver is expanded (user idle)
   useEffect(() => {
     if (!screensaverExpanded) return;
-    const id = setTimeout(() => window.location.reload(), RELOAD_INTERVAL_MS);
+    const id = setTimeout(() => useDataStore.getState().refreshData(), RELOAD_INTERVAL_MS);
     return () => clearTimeout(id);
   }, [screensaverExpanded]);
 
@@ -125,7 +178,6 @@ export default function KioskShell() {
   }, [resetIdle]);
 
   const handleScreensaverTap = () => {
-    if (!withinWorkingHours) return; // outside hours: black screen can't be dismissed
     setScreensaverExpanded(prev => !prev);
     resetIdle();
   };
@@ -223,10 +275,55 @@ export default function KioskShell() {
     handleClear();
   };
 
+  const cacheWatermark = loaded && lastRefreshed === null && (
+    <div style={{
+      position: "fixed", bottom: 6, left: 0, right: 0, zIndex: 89,
+      textAlign: "center", fontSize: 10, color: "#aaa",
+      pointerEvents: "none", letterSpacing: 0.3,
+    }}>
+      cached version
+    </div>
+  );
+
+  const pullIndicator = (
+    <>
+      {/* Pull bar — height driven by direct DOM mutation for smoothness */}
+      <div ref={pullBarRef} style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 90,
+        height: 0, overflow: "hidden",
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        paddingBottom: 10,
+        background: "rgba(0,34,107,0.07)",
+        pointerEvents: "none",
+      }}>
+        <div ref={pullSpinnerRef} style={{
+          width: 22, height: 22,
+          border: "2px solid var(--navy)",
+          borderTopColor: "transparent",
+          borderRadius: "50%",
+          opacity: 0,
+        }} />
+      </div>
+      {/* Refreshing spinner — React state driven */}
+      {isRefreshing && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 90,
+          height: 48, display: "flex", alignItems: "flex-end", justifyContent: "center",
+          paddingBottom: 10, background: "rgba(0,34,107,0.07)", pointerEvents: "none",
+        }}>
+          <div className="animate-spin" style={{
+            width: 22, height: 22,
+            border: "2px solid var(--navy)", borderTopColor: "transparent", borderRadius: "50%",
+          }} />
+        </div>
+      )}
+    </>
+  );
+
   const overlays = (
     <>
       {/* Screensaver overlay */}
-      <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} isWorkingHours={withinWorkingHours} />
+      <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} />
 
       {/* Admin panel */}
       {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); setQuery(""); }} />}
@@ -322,6 +419,8 @@ export default function KioskShell() {
     return (
       <div className="h-full flex flex-col overflow-hidden" style={{ background: "var(--bg)" }} onPointerDown={resetIdle}>
         {overlays}
+        {pullIndicator}
+        {cacheWatermark}
 
         {/* V1 Header: Navy bar with branding + search */}
         <div className="v1-header">
@@ -359,7 +458,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #14</p>
+            <p>Version 1.0 Build #15</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
             <p>Since {formatTimestamp(lastStaffRefreshed)}</p>
@@ -372,6 +471,8 @@ export default function KioskShell() {
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
       {overlays}
+      {pullIndicator}
+      {cacheWatermark}
 
       {/* Search bar */}
       <div className="flex items-center gap-2 px-4 pt-8 pb-2 flex-shrink-0">
@@ -414,7 +515,7 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #14</p>
+          <p>Version 1.0 Build #15</p>
         </div>
       )}
     </div>

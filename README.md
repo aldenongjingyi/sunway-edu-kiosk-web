@@ -1,140 +1,298 @@
-# Sunway Edu Kiosk — Web App
+# Sunway Education Kiosk — Web App
 
-Interactive campus kiosk web app for Sunway University MyCampus. Runs as a fullscreen WebView on an Elo Android kiosk device.
-
----
-
-## How It Works
-
-### Code & Storage
-- Source code is mirrored to two GitHub remotes (`aldenongjingyi` and `map711`) on every push
-- The built app (static HTML/CSS/JS) is hosted on **DigitalOcean Spaces** (`kiosk-sunwayedu.getmallapp.com` bucket, `sgp1` region)
-
-### Deploy Flow
-1. Push to `main`
-2. GitHub Action triggers automatically — fetches wayfinder JS, runs `next build`, syncs `out/` to DO Spaces
-3. Or deploy manually: `node --env-file=.env.local scripts/deploy.mjs`
-
-### Runtime Flow (on the Elo)
-1. Android WebView loads `https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com/index.html`
-2. Next.js static app boots — CSS/JS assets load from the same DO Spaces path (via `assetPrefix`)
-3. Wayfinder map JS loads from `NEXT_PUBLIC_WAYFINDER_URL` (also DO Spaces)
-4. Campus data (`indoorcms.com`) and staff data (`izone.sunway.edu.my`) are fetched via a **Cloudflare Worker** (`sunway-kiosk-proxy.sunway-kiosk.workers.dev`) which handles CORS
-5. Map renders, screensaver runs, kiosk is live
-
-### Services
-| Service | Purpose |
-|---|---|
-| DigitalOcean Spaces | Hosts the static web app |
-| GitHub (×2) | Source control + auto-deploy trigger |
-| Cloudflare Worker | CORS proxy for campus/staff APIs |
-| ADB over WiFi | Dev access to the Elo kiosk device |
+Next.js 16 static export served to an Elo touchscreen kiosk running an Android WebView shell (`com.map72.sunwaykiosk`).
 
 ---
 
 ## Stack
 
-- **Next.js 16** (App Router, static export)
-- **React 19**, TypeScript, Tailwind CSS v4, Zustand
-
----
-
-## Setup
-
-### Prerequisites
-- Node.js 20+
-- A `.env.local` file (see below)
-
-### Environment Variables
-
-Create `.env.local` in the project root:
-
-```env
-DO_SPACES_KEY=your_key
-DO_SPACES_SECRET=your_secret
-DO_SPACES_REGION=sgp1
-DO_SPACES_BUCKET=kiosk-sunwayedu.getmallapp.com
-DO_SPACES_PATH=
-NEXT_PUBLIC_WAYFINDER_URL=https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com/wayfinder-map.min.js
-```
-
-### Install & Run Dev Server
-
-```bash
-npm install
-npm run dev
-```
-
-### Deploy to DO Spaces
-
-```bash
-node --env-file=.env.local scripts/deploy.mjs
-```
-
-### GitHub Secrets (for auto-deploy)
-
-Add these to `aldenongjingyi/sunway-edu-kiosk-web` → Settings → Secrets → Actions:
-
-| Secret | Value |
+| Layer | Technology |
 |---|---|
-| `DO_SPACES_KEY` | DO Spaces access key |
-| `DO_SPACES_SECRET` | DO Spaces secret |
-| `DO_SPACES_REGION` | `sgp1` |
-| `DO_SPACES_BUCKET` | `kiosk-sunwayedu.getmallapp.com` |
-| `DO_SPACES_PATH` | (leave empty) |
+| Framework | Next.js 16.2.6, React 19.2.4, TypeScript |
+| Styling | Tailwind CSS |
+| State | Zustand |
+| Output | Static export (`output: "export"`) |
+| Hosting (prod) | DigitalOcean Spaces CDN |
+| Hosting (staging) | Vercel |
+| Android shell | Kotlin WebView (`cacheMode = LOAD_NO_CACHE`) |
 
 ---
 
-## Elo Kiosk (ADB)
+## Architecture
 
-Connect to the Elo device over WiFi:
-
-```bash
-~/Library/Android/sdk/platform-tools/adb connect 192.168.100.222:5555
+```
+IndoorCMS API ─────┐
+                   ▼
+            CORS Proxy (CF Worker)
+                   │
+                   ▼
+           Zustand store (lib/store.ts)
+           ├── on success → save to localStorage cache
+           └── on failure → load from localStorage cache
+                   │
+                   ▼
+              React UI
 ```
 
-If the IP has changed: run `arp -a` and try each IP on port 5555.
+- **CORS proxy**: `https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=<encoded>`
+- **Campus data**: `https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz`
+- **Staff data**: `https://izone.sunway.edu.my/segfeeds/staff/mycampus/<token>`
+- API calls always include `&_=<timestamp>` to bust CDN/proxy caches
+- Data is **never filtered by device time** — all filtering uses API-provided fields only
 
-Restart the kiosk app:
-```bash
-adb -s 192.168.100.222:5555 shell am force-stop com.map72.sunwaykiosk
-adb -s 192.168.100.222:5555 shell am start -n com.map72.sunwaykiosk/.MainActivity
-```
+---
+
+## Data Flow
+
+### Online
+1. `fetchGzip(url)` fetches via CORS proxy with `cache: "no-store"`
+2. On success: save raw JSON to `localStorage` (`kiosk.data.cache` / `kiosk.staff.cache`)
+3. Process data into Zustand store → UI reads from store
+4. `lastRefreshed` set to `new Date()`
+
+### Offline / API failure
+1. Load from `localStorage` cache
+2. Process same way into Zustand store → UI unchanged
+3. `lastRefreshed` set to `null` → "cached version" watermark shown at bottom of screen
+
+### Refresh
+- **Pull-to-refresh**: swipe down anywhere → calls `refreshData()` (force re-fetches both campus + staff)
+- **Admin panel**: "Refresh API Data" button → same `refreshData()`
+- **Periodic**: soft refresh triggered when screensaver is expanded (idle state)
+
+---
+
+## Key Files
+
+| File | Purpose |
+|---|---|
+| `app/page.tsx` | Entry point → renders `<KioskShell />` |
+| `components/KioskShell.tsx` | Main shell — all state (tab, search, map, screensaver, admin, pull-to-refresh) |
+| `components/MapView.tsx` | Wayfinder indoor map embed |
+| `components/Screensaver.tsx` | Idle overlay — static (n=1) or carousel (n≥2), nothing if n=0 |
+| `components/AdminPanel.tsx` | Admin settings (triggered by typing `my3245campusx`) |
+| `lib/store.ts` | Zustand store — data loading, caching, design toggle |
+| `lib/types.ts` | TypeScript types |
+| `next.config.ts` | Static export config, conditional `assetPrefix` |
+| `scripts/deploy.mjs` | Deploy script → DO Spaces |
+
+---
+
+## Screensaver Behaviour
+
+| Highlights count | Behaviour |
+|---|---|
+| 0 | Nothing rendered |
+| 1 | Static image — no carousel, no auto-advance |
+| ≥2 | Swipeable carousel, auto-advances every 5 s |
+
+Working hours scheduling is handled by Hexnode MDM — not the web app.
 
 ---
 
 ## Admin Panel
 
-Access: tap the version string 5 times → enter password `my3245campusx`
+Trigger: type `my3245campusx` into the search bar.
 
-- **Data Status** — shows loaded record counts and last fetch times
-- **Working Hours** — configures the lockscreen schedule (currently disabled)
-- **Refresh API Data** — re-fetches campus and staff data
-- **Map Integration** — select which kiosk node this device represents (saves to `localStorage`)
+The admin panel exposes **only kiosk node provisioning** — no other settings. This prevents students from tampering with kiosk behaviour.
+
+| Key | Storage | Purpose |
+|---|---|---|
+| `admin.kiosk.nodeId` | `localStorage` | Kiosk node ID for Wayfinder "you are here" — set once per device |
+
+### Hardcoded settings (change in source, not via UI)
+
+These are intentionally not in any UI. Edit the noted file and redeploy to change them.
+
+#### `components/KioskShell.tsx`
+
+| Constant | Default | Purpose |
+|---|---|---|
+| `DESIGN` | `"default"` | UI layout — `"default"` (iOS-style) or `"v1"` (airport-kiosk style) |
+| `ADMIN_CODE` | `"my3245campusx"` | Secret code typed into search bar to open node provisioning |
+| `IDLE_SECONDS` | `20` | Seconds of inactivity before screensaver expands |
+| `RELOAD_INTERVAL_MS` | `900000` (15 min) | How often data auto-refreshes while screensaver is active (idle only) |
+
+#### `components/Screensaver.tsx`
+
+| Constant | Default | Purpose |
+|---|---|---|
+| `VARIANT` | `3` | Visual style — `1` black bg + card, `2` flush to edge, `3` dimmed scrim, `4` colour-wash blur |
+| `THUMB_PX` | `120` | Collapsed thumbnail width in px |
+| Auto-advance interval | `5000` ms | How often the carousel slides (inside `restartTimer`) |
+
+#### `app/build.gradle.kts` (Android shell)
+
+| Field | Default | Purpose |
+|---|---|---|
+| `KIOSK_URL` | Vercel / DO Spaces URL | URL the WebView loads — set per branch (`main` = DO Spaces, `vercel-dev` = Vercel) |
 
 ---
 
-## TODO (Before Production)
-- Evaluate replacing Cloudflare Worker with DO Functions to consolidate to a single provider
-- Enable static website hosting on DO Spaces so the root URL works without `/index.html`
+## Asset Prefix Logic
+
+```ts
+// next.config.ts
+assetPrefix: (process.env.LOCAL_BUILD || process.env.VERCEL || process.env.NODE_ENV !== "production")
+  ? ""
+  : "https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com"
+```
+
+- Vercel and local builds get an empty prefix (serve their own assets)
+- DO Spaces production builds use the CDN prefix
 
 ---
 
-## Switching Branches on the Elo
+## Deployment
 
-DO Spaces always serves whatever was last deployed. Both `main` and `design/v1` build to the same bucket — whichever was deployed most recently is what the Elo loads.
-
-**Deploy `design/v1`:**
-```bash
-git checkout design/v1
-node --env-file=.env.local scripts/deploy.mjs
-git checkout main
+### Staging (Vercel)
+```sh
+vercel build
+vercel deploy --prebuilt
+vercel promote <deployment-url>
 ```
 
-**Switch back to `main`:**
-```bash
-git checkout main
+### Production (DO Spaces)
+```sh
 node --env-file=.env.local scripts/deploy.mjs
 ```
 
-The Elo will pick up the change on next app restart (or force-stop + start via ADB).
+### Git
+```sh
+git push origin --all   # pushes to both aldenongjingyi and map711 remotes
+```
+
+---
+
+## Android Shell
+
+- Package: `com.map72.sunwaykiosk`
+- `cacheMode = WebSettings.LOAD_NO_CACHE` — always loads fresh HTML/JS, prevents stale WebView cache
+- On load error: shows `offline.html`, retries every 5 s
+- Back button swallowed (kiosk cannot be exited)
+- Fullscreen immersive sticky mode
+
+---
+
+## Wayfinder Map API
+
+```js
+navigateTo({ from: locationId, to: locationId })  // route between two locations
+focusLocation(id)                                  // pan to location (no route)
+resetView()                                        // clear route and reset camera
+setFloor(floorId)                                  // switch floor
+// Note: centerOn() is a no-op while a route is active — use resetView() instead
+```
+
+- Kiosk node ID stored in `admin.kiosk.nodeId` drives the `you-are-here-node-id` attribute
+- Route mode: `lift`
+
+---
+
+## Browser Target
+
+```
+chrome >= 87
+android >= 87
+```
+
+---
+
+## Troubleshooting
+
+### Remote debugging the Elo kiosk via ADB
+
+Connect ADB wirelessly (requires platform-tools 35.0.2+):
+```sh
+adb mdns services              # find kiosk IP/port after reboot
+adb pair <ip>:<pairing-port> <6-digit-code>
+adb connect <ip>:<connection-port>
+adb devices                    # confirm connected
+```
+
+After connecting, open Chrome DevTools remotely:
+```sh
+# Find the WebView PID
+adb shell "cat /proc/net/unix | grep devtools"
+# Output: ...webview_devtools_remote_<PID>
+
+# Forward the DevTools port
+adb forward tcp:9222 localabstract:webview_devtools_remote_<PID>
+```
+
+Then open `chrome://inspect` in your desktop Chrome, or connect via WebSocket at `ws://localhost:9222`. You can inspect the DOM, run JS, monitor network requests, and check localStorage directly on the device.
+
+To read localStorage from DevTools console:
+```js
+localStorage.getItem("kiosk.data.cache")?.length    // campus data size in chars
+localStorage.getItem("kiosk.staff.cache")?.length   // staff data size (~949KB expected)
+```
+
+---
+
+### Production vs staging: which device loads what
+
+| Environment | URL | Used by |
+|---|---|---|
+| **Production** | `https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com` | Elo kiosk (ADB), Hexnode-managed devices |
+| **Staging** | Vercel deployment URL | Browser testing only |
+
+The Android shell's `KIOSK_URL` is set at build time in `app/build.gradle.kts`. The `main` branch APK points to DO Spaces. **Deploying to Vercel has no effect on the physical kiosk or Hexnode devices** — only `scripts/deploy.mjs` (DO Spaces) does.
+
+---
+
+### Staff tab eternally loading / spinner never goes away
+
+**Root cause**: Staff data failed to fetch AND localStorage cache is empty (or was wiped by `pm clear`).
+
+`pm clear com.map72.sunwaykiosk` wipes all app data: localStorage, service worker cache, WebView HTTP cache. After this, on first boot the app must fetch fresh data. If the fetch fails silently, the spinner loops forever.
+
+**Diagnosing**: Check what the CORS proxy returns for the staff endpoint:
+```sh
+curl -v "https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=https%3A%2F%2Fizone.sunway.edu.my%2Fsegfeeds%2Fstaff%2Fmycampus%2F<token>"
+```
+Look for `content-length` in the response headers. If it's `0` or missing when the body is non-empty, the Worker has the content-length bug (see below).
+
+**Recovery**: Pull-to-refresh or tap "Refresh API Data" in the admin panel. If the fetch succeeds, data is cached in localStorage and subsequent boots load from cache.
+
+---
+
+### Cloudflare Worker `content-length: 0` bug
+
+**What happened**: `izone.sunway.edu.my` (staff API) returns `Transfer-Encoding: chunked` with no `Content-Length` header. When the Cloudflare Worker copied upstream headers with `new Headers(upstream.headers)` and passed the body via `new Response(upstream.body, ...)`, Cloudflare set `content-length: 0` on the outgoing response.
+
+**Why Android broke but curl didn't**: Android WebView (like most strict HTTP clients) reads exactly as many bytes as `Content-Length` says — 0 bytes. `response.json()` then fails on the empty body, the catch block runs, and staff never loads. `curl` by contrast reads until the connection closes, ignoring a bogus `Content-Length: 0`.
+
+**The fix** (in `workers/proxy/index.js`):
+```js
+headers.delete("Content-Encoding"); // let CF handle encoding
+headers.delete("Content-Length");   // upstream uses chunked; avoid CF setting wrong length
+```
+
+Deleting `Content-Length` lets Cloudflare re-derive the correct length from the actual body.
+
+**Deploying the Worker** requires an interactive Cloudflare login. Run in your terminal (not in Claude's shell):
+```sh
+cd workers/proxy
+npx wrangler deploy
+```
+This opens a browser OAuth flow. The Worker deploys globally — all devices (Elo, Hexnode) pick up the fix immediately without any APK or web build changes.
+
+---
+
+### Staff photo avatars not showing
+
+**Symptom**: Staff list shows gray placeholder circles for every staff member, even after data loads.
+
+**Known causes**:
+
+1. **`vine.sunway.edu.my` is internal-only** — staff photo URLs often point to `vine.sunway.edu.my`, which only resolves inside Sunway's campus network. Photos will fail to load from outside campus. This is expected and not a bug — `AvatarPlaceholder` shows the gray placeholder on `onError`.
+
+2. **React `onError` not firing** — if any JavaScript in the page calls `event.stopImmediatePropagation()` on `window` during the capture phase for `error` events, the event never reaches the `<img>` element and React's `onError` handler never runs. The image stays `opacity: 0` (invisible) indefinitely. Check `HyperDXInit.tsx` and any other global event listeners for this pattern.
+
+3. **Invisible placeholder** — if the placeholder div has `bg-white` background it's invisible on the white page. The placeholder uses `bg-[#e5e5ea]` (gray) to match the iOS app's behavior.
+
+**`AvatarPlaceholder` 3-state logic**:
+- `"loading"` — shows gray circle + person icon, image rendered at `opacity: 0`
+- `"loaded"` — image fades in (`opacity: 1`), gray circle hidden
+- `"error"` — shows gray circle + person icon (same as no `src`)

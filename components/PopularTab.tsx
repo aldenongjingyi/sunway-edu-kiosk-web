@@ -4,7 +4,7 @@ import { useDataStore } from "@/lib/store";
 export default function PopularTab({ onSelect }: { onSelect: (text: string) => void }) {
   const trendings = useDataStore(s => s.trendings);
   const loaded = useDataStore(s => s.loaded);
-  const isV1 = useDataStore(s => s.design === "v1");
+  const isV1 = false; // design hardcoded in KioskShell.tsx
 
   if (isV1) {
     return (
