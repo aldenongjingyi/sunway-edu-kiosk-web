@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDataStore } from "@/lib/store";
+import { hdx } from "@/lib/hdx";
 import PopularTab from "./PopularTab";
 import FacilitiesTab from "./FacilitiesTab";
 import DepartmentsTab from "./DepartmentsTab";
@@ -63,6 +64,7 @@ export default function KioskShell() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Pull to refresh ────────────────────────────────────────────────────────
   const PULL_THRESHOLD = 100;
@@ -110,6 +112,7 @@ export default function KioskShell() {
       if (committed && !isRefreshingRef.current) {
         isRefreshingRef.current = true;
         setIsRefreshing(true);
+        hdx.addAction("ui.refresh.pull");
         useDataStore.getState().refreshData().then(() => {
           isRefreshingRef.current = false;
           setIsRefreshing(false);
@@ -139,6 +142,7 @@ export default function KioskShell() {
       sessionStorage.removeItem("admin.reopen");
       setShowAdmin(true);
     }
+    hdx.addAction("ui.shell.mounted");
     loadData().then(() => {
       loadStaff();
       setScreensaverExpanded(true);
@@ -178,7 +182,10 @@ export default function KioskShell() {
   }, [resetIdle]);
 
   const handleScreensaverTap = () => {
-    setScreensaverExpanded(prev => !prev);
+    setScreensaverExpanded(prev => {
+      if (prev) hdx.addAction("ui.screensaver.dismiss");
+      return !prev;
+    });
     resetIdle();
   };
 
@@ -194,9 +201,17 @@ export default function KioskShell() {
     setFilterDepartment(null);
     setShowResults(val.length > 0);
     resetIdle();
+    // Debounce typed search tracking — fire 1s after user stops typing
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (val.length > 1) {
+      searchDebounceRef.current = setTimeout(() => {
+        hdx.addAction("ui.search.typed", { query: val });
+      }, 1000);
+    }
   };
 
   const handleClear = () => {
+    if (query.length > 0) hdx.addAction("ui.search.clear", { query });
     setQuery("");
     setFilterCategory(null);
     setFilterDepartment(null);
@@ -205,6 +220,7 @@ export default function KioskShell() {
   };
 
   const handlePopularSelect = (text: string) => {
+    hdx.addAction("ui.search.popular", { query: text });
     setQuery(text);
     setFilterCategory(null);
     setFilterDepartment(null);
@@ -213,6 +229,7 @@ export default function KioskShell() {
   };
 
   const handleCategorySelect = (cat: Category) => {
+    hdx.addAction("ui.search.category", { category: cat.title, categoryId: cat.id });
     setQuery(cat.title);
     setFilterCategory(cat.id);
     setFilterDepartment(null);
@@ -221,6 +238,7 @@ export default function KioskShell() {
   };
 
   const handleDepartmentSelect = (dept: string) => {
+    hdx.addAction("ui.search.department", { department: dept });
     setQuery(dept);
     setFilterDepartment(dept);
     setFilterCategory(null);
@@ -248,6 +266,9 @@ export default function KioskShell() {
       }
     }
 
+    const locationTitle = locations.find(l => l.id === locationId)?.title ?? "";
+    hdx.addAction("ui.map.navigate", { destinationId: locationId, locationTitle });
+
     if (floors.length >= 2) {
       setFloorPicker({ locationId, floors });
     } else {
@@ -257,20 +278,27 @@ export default function KioskShell() {
     resetIdle();
   };
 
-  const handleLocationSelect = (id: number) => openMap(id);
+  const handleLocationSelect = (id: number) => {
+    const loc = locations.find(l => l.id === id);
+    hdx.addAction("ui.location.select", { locationId: id, locationTitle: loc?.title ?? "" });
+    openMap(id);
+  };
 
   const handleStaffSelect = (s: Staff) => {
+    hdx.addAction("ui.staff.select", { staffName: s.fullName, department: s.department, designation: s.designation });
     const loc = locations.find(l => l.venue === s.lotID);
     if (loc) openMap(loc.id);
     resetIdle();
   };
 
   const handleMapClose = () => {
+    hdx.addAction("ui.map.close");
     setMapDestinationId(null);
     resetIdle();
   };
 
   const handleTabChange = (i: number) => {
+    hdx.addAction("ui.tab.change", { tab: TABS_DEFAULT[i], index: i });
     setTab(i);
     handleClear();
   };
