@@ -47,11 +47,17 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const dragDeltaRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ratioSetRef = useRef(false);
+  const firstLoadedRef = useRef(false);
   const isExpandedRef = useRef(isExpanded);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [firstLoaded, setFirstLoaded] = useState(false);
+  const loadedUrlsRef = useRef<Set<string>>(new Set());
+  const currentIdxRef = useRef(0);
+  const highlightsRef = useRef(highlights);
 
   useEffect(() => { nRef.current = n; }, [n]);
   useEffect(() => { isExpandedRef.current = isExpanded; }, [isExpanded]);
+  useEffect(() => { highlightsRef.current = highlights; }, [highlights]);
 
   const [imageRatio, setImageRatio] = useState(1.35);
   const [mounted, setMounted] = useState(false);
@@ -123,9 +129,13 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   const handleSlideEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
     if (e.propertyName !== "transform") return;
     if (commitRef.current === "next") {
-      setCurrentIdx(i => (i + 1) % nRef.current);
+      const next = (currentIdxRef.current + 1) % nRef.current;
+      currentIdxRef.current = next;
+      setCurrentIdx(next);
     } else if (commitRef.current === "prev") {
-      setCurrentIdx(i => (i - 1 + nRef.current) % nRef.current);
+      const prev = (currentIdxRef.current - 1 + nRef.current) % nRef.current;
+      currentIdxRef.current = prev;
+      setCurrentIdx(prev);
     }
     setSlideOffset(0);
     setSlideAnimate(false);
@@ -137,6 +147,11 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   // Two rAFs ensure state renders at offset=0 before transition kicks in.
   const triggerSlide = (dir: 1 | -1) => {
     if (nRef.current < 2 || isAnimating.current) return;
+    const targetIdx = dir === 1
+      ? (currentIdxRef.current + 1) % nRef.current
+      : (currentIdxRef.current - 1 + nRef.current) % nRef.current;
+    const targetUrl = highlightsRef.current[targetIdx]?.image?.replace("http:", "https:");
+    if (targetUrl && !loadedUrlsRef.current.has(targetUrl)) return;
     const w = containerRef.current?.offsetWidth ?? vpWRef.current;
     isAnimating.current = true;
     commitRef.current = dir === 1 ? "next" : "prev";
@@ -152,17 +167,22 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
 
   const restartTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (nRef.current < 2) return;
+    if (nRef.current < 2 || !firstLoadedRef.current) return;
     timerRef.current = setInterval(() => triggerSlide(1), 5000);
   };
 
   useEffect(() => {
     setCurrentIdx(0);
+    currentIdxRef.current = 0;
     setSlideOffset(0);
     setSlideAnimate(false);
+    setFirstLoaded(false);
+    firstLoadedRef.current = false;
+    loadedUrlsRef.current = new Set();
     isAnimating.current = false;
     commitRef.current = null;
-    restartTimer();
+    ratioSetRef.current = false;
+    if (timerRef.current) clearInterval(timerRef.current);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n]);
@@ -215,6 +235,24 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
       // Snap back
       commitRef.current = "snap";
       setSlideOffset(0);
+    }
+  };
+
+  // ── Image load tracking ───────────────────────────────────────────────────
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>, isCurrent: boolean) => {
+    const img = e.currentTarget;
+    const src = img.src;
+    loadedUrlsRef.current.add(src);
+    if (isCurrent) {
+      if (!ratioSetRef.current && img.naturalWidth > 0) {
+        ratioSetRef.current = true;
+        setImageRatio(img.naturalHeight / img.naturalWidth);
+      }
+      if (!firstLoadedRef.current) {
+        firstLoadedRef.current = true;
+        setFirstLoaded(true);
+        restartTimer();
+      }
     }
   };
 
@@ -290,12 +328,13 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
           width: geom.width, height: geom.height,
           borderRadius: geom.borderRadius,
           boxShadow: SHADOW,
-          background: "#111",
+          background: "transparent",
           overflow: "hidden",
           zIndex: 50,
           cursor: n >= 2 ? "grab" : "default",
           touchAction: "none",
-          transition: `top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
+          opacity: firstLoaded ? 1 : 0,
+          transition: `opacity 0.4s ease, top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -309,16 +348,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
             src={currentSlide!.image.replace("http:", "https:")}
             alt={currentSlide!.title}
             draggable={false}
-            onLoad={(e) => {
-              if (!ratioSetRef.current) {
-                const img = e.currentTarget;
-                if (img.naturalWidth > 0) {
-                  ratioSetRef.current = true;
-                  setImageRatio(img.naturalHeight / img.naturalWidth);
-                }
-              }
-            }}
-            style={{ ...imgStyle, left: 0 }}
+            onLoad={e => handleImageLoad(e, true)}
+            style={{ ...imgStyle, left: 0, background: "#111" }}
           />
         ) : (
           /* Inner slider — translates all images together */
@@ -332,7 +363,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
           >
             {prevSlide && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} style={{ ...imgStyle, left: "-100%" }} />
+              <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "-100%", background: "#111" }} />
             )}
             {currentSlide ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -340,16 +371,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
                 src={currentSlide.image.replace("http:", "https:")}
                 alt={currentSlide.title}
                 draggable={false}
-                onLoad={(e) => {
-                  if (!ratioSetRef.current) {
-                    const img = e.currentTarget;
-                    if (img.naturalWidth > 0) {
-                      ratioSetRef.current = true;
-                      setImageRatio(img.naturalHeight / img.naturalWidth);
-                    }
-                  }
-                }}
-                style={{ ...imgStyle, left: 0 }}
+                onLoad={e => handleImageLoad(e, true)}
+                style={{ ...imgStyle, left: 0, background: "#111" }}
               />
             ) : (
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -358,7 +381,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
             )}
             {nextSlide && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} style={{ ...imgStyle, left: "100%" }} />
+              <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "100%", background: "#111" }} />
             )}
           </div>
         )}
