@@ -271,12 +271,34 @@ headers.delete("Content-Length");   // upstream uses chunked; avoid CF setting w
 
 Deleting `Content-Length` lets Cloudflare re-derive the correct length from the actual body.
 
-**Deploying the Worker** requires an interactive Cloudflare login. Run in your terminal (not in Claude's shell):
+**Deploying the Worker** requires an interactive Cloudflare login. The Worker is on the **aldenongjingyi GitHub-linked Cloudflare account** — there are multiple accounts on this machine so make sure you're logged into the right one.
+
+Run in your terminal (not in Claude's shell):
 ```sh
+# Verify correct account first:
+npx wrangler whoami   # should show aldenongjingyi/GitHub account
+
+# If wrong account:
+npx wrangler logout
+npx wrangler login    # sign in with GitHub
+
 cd workers/proxy
 npx wrangler deploy
 ```
-This opens a browser OAuth flow. The Worker deploys globally — all devices (Elo, Hexnode) pick up the fix immediately without any APK or web build changes.
+The Worker deploys globally — all devices (Elo, Hexnode) pick up the fix immediately without any APK or web build changes.
+
+---
+
+### Staff loads on Elo but not in browser (CORS origin mismatch)
+
+The Elo APK loads from the direct DO Spaces URL (`https://sgp1.digitaloceanspaces.com/...`). When you open the link the deploy script prints (`https://kiosk-sunwayedu.getmallapp.com.sgp1.cdn.digitaloceanspaces.com/...`), the browser sends a different `Origin` header — the CDN subdomain. If only the direct URL is in `ALLOWED_ORIGINS`, the Worker returns the wrong `Access-Control-Allow-Origin` and the browser blocks the fetch.
+
+**Fix**: ensure both origins are in `ALLOWED_ORIGINS` in `workers/proxy/index.js`:
+```js
+"https://sgp1.digitaloceanspaces.com",
+"https://kiosk-sunwayedu.getmallapp.com.sgp1.cdn.digitaloceanspaces.com",
+```
+Then redeploy the Worker.
 
 ---
 
