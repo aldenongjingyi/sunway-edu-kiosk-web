@@ -102,13 +102,30 @@ The admin panel exposes **only kiosk node provisioning** — no other settings. 
 
 ### Hardcoded settings (change in source, not via UI)
 
-These are intentionally not in any UI. To change them, edit `components/KioskShell.tsx` and redeploy:
+These are intentionally not in any UI. Edit the noted file and redeploy to change them.
 
-| Constant | Location | Default | Purpose |
-|---|---|---|---|
-| `DESIGN` | `KioskShell.tsx` | `"default"` | UI layout — `"default"` (iOS-style) or `"v1"` (airport-kiosk style) |
-| `IDLE_SECONDS` | `KioskShell.tsx` | `20` | Seconds of inactivity before screensaver expands |
-| `RELOAD_INTERVAL_MS` | `KioskShell.tsx` | `900000` (15 min) | How often data auto-refreshes while screensaver is active |
+#### `components/KioskShell.tsx`
+
+| Constant | Default | Purpose |
+|---|---|---|
+| `DESIGN` | `"default"` | UI layout — `"default"` (iOS-style) or `"v1"` (airport-kiosk style) |
+| `ADMIN_CODE` | `"my3245campusx"` | Secret code typed into search bar to open node provisioning |
+| `IDLE_SECONDS` | `20` | Seconds of inactivity before screensaver expands |
+| `RELOAD_INTERVAL_MS` | `900000` (15 min) | How often data auto-refreshes while screensaver is active (idle only) |
+
+#### `components/Screensaver.tsx`
+
+| Constant | Default | Purpose |
+|---|---|---|
+| `VARIANT` | `3` | Visual style — `1` black bg + card, `2` flush to edge, `3` dimmed scrim, `4` colour-wash blur |
+| `THUMB_PX` | `120` | Collapsed thumbnail width in px |
+| Auto-advance interval | `5000` ms | How often the carousel slides (inside `restartTimer`) |
+
+#### `app/build.gradle.kts` (Android shell)
+
+| Field | Default | Purpose |
+|---|---|---|
+| `KIOSK_URL` | Vercel / DO Spaces URL | URL the WebView loads — set per branch (`main` = DO Spaces, `vercel-dev` = Vercel) |
 
 ---
 
@@ -178,3 +195,104 @@ setFloor(floorId)                                  // switch floor
 chrome >= 87
 android >= 87
 ```
+
+---
+
+## Troubleshooting
+
+### Remote debugging the Elo kiosk via ADB
+
+Connect ADB wirelessly (requires platform-tools 35.0.2+):
+```sh
+adb mdns services              # find kiosk IP/port after reboot
+adb pair <ip>:<pairing-port> <6-digit-code>
+adb connect <ip>:<connection-port>
+adb devices                    # confirm connected
+```
+
+After connecting, open Chrome DevTools remotely:
+```sh
+# Find the WebView PID
+adb shell "cat /proc/net/unix | grep devtools"
+# Output: ...webview_devtools_remote_<PID>
+
+# Forward the DevTools port
+adb forward tcp:9222 localabstract:webview_devtools_remote_<PID>
+```
+
+Then open `chrome://inspect` in your desktop Chrome, or connect via WebSocket at `ws://localhost:9222`. You can inspect the DOM, run JS, monitor network requests, and check localStorage directly on the device.
+
+To read localStorage from DevTools console:
+```js
+localStorage.getItem("kiosk.data.cache")?.length    // campus data size in chars
+localStorage.getItem("kiosk.staff.cache")?.length   // staff data size (~949KB expected)
+```
+
+---
+
+### Production vs staging: which device loads what
+
+| Environment | URL | Used by |
+|---|---|---|
+| **Production** | `https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com` | Elo kiosk (ADB), Hexnode-managed devices |
+| **Staging** | Vercel deployment URL | Browser testing only |
+
+The Android shell's `KIOSK_URL` is set at build time in `app/build.gradle.kts`. The `main` branch APK points to DO Spaces. **Deploying to Vercel has no effect on the physical kiosk or Hexnode devices** — only `scripts/deploy.mjs` (DO Spaces) does.
+
+---
+
+### Staff tab eternally loading / spinner never goes away
+
+**Root cause**: Staff data failed to fetch AND localStorage cache is empty (or was wiped by `pm clear`).
+
+`pm clear com.map72.sunwaykiosk` wipes all app data: localStorage, service worker cache, WebView HTTP cache. After this, on first boot the app must fetch fresh data. If the fetch fails silently, the spinner loops forever.
+
+**Diagnosing**: Check what the CORS proxy returns for the staff endpoint:
+```sh
+curl -v "https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=https%3A%2F%2Fizone.sunway.edu.my%2Fsegfeeds%2Fstaff%2Fmycampus%2F<token>"
+```
+Look for `content-length` in the response headers. If it's `0` or missing when the body is non-empty, the Worker has the content-length bug (see below).
+
+**Recovery**: Pull-to-refresh or tap "Refresh API Data" in the admin panel. If the fetch succeeds, data is cached in localStorage and subsequent boots load from cache.
+
+---
+
+### Cloudflare Worker `content-length: 0` bug
+
+**What happened**: `izone.sunway.edu.my` (staff API) returns `Transfer-Encoding: chunked` with no `Content-Length` header. When the Cloudflare Worker copied upstream headers with `new Headers(upstream.headers)` and passed the body via `new Response(upstream.body, ...)`, Cloudflare set `content-length: 0` on the outgoing response.
+
+**Why Android broke but curl didn't**: Android WebView (like most strict HTTP clients) reads exactly as many bytes as `Content-Length` says — 0 bytes. `response.json()` then fails on the empty body, the catch block runs, and staff never loads. `curl` by contrast reads until the connection closes, ignoring a bogus `Content-Length: 0`.
+
+**The fix** (in `workers/proxy/index.js`):
+```js
+headers.delete("Content-Encoding"); // let CF handle encoding
+headers.delete("Content-Length");   // upstream uses chunked; avoid CF setting wrong length
+```
+
+Deleting `Content-Length` lets Cloudflare re-derive the correct length from the actual body.
+
+**Deploying the Worker** requires an interactive Cloudflare login. Run in your terminal (not in Claude's shell):
+```sh
+cd workers/proxy
+npx wrangler deploy
+```
+This opens a browser OAuth flow. The Worker deploys globally — all devices (Elo, Hexnode) pick up the fix immediately without any APK or web build changes.
+
+---
+
+### Staff photo avatars not showing
+
+**Symptom**: Staff list shows gray placeholder circles for every staff member, even after data loads.
+
+**Known causes**:
+
+1. **`vine.sunway.edu.my` is internal-only** — staff photo URLs often point to `vine.sunway.edu.my`, which only resolves inside Sunway's campus network. Photos will fail to load from outside campus. This is expected and not a bug — `AvatarPlaceholder` shows the gray placeholder on `onError`.
+
+2. **React `onError` not firing** — if any JavaScript in the page calls `event.stopImmediatePropagation()` on `window` during the capture phase for `error` events, the event never reaches the `<img>` element and React's `onError` handler never runs. The image stays `opacity: 0` (invisible) indefinitely. Check `HyperDXInit.tsx` and any other global event listeners for this pattern.
+
+3. **Invisible placeholder** — if the placeholder div has `bg-white` background it's invisible on the white page. The placeholder uses `bg-[#e5e5ea]` (gray) to match the iOS app's behavior.
+
+**`AvatarPlaceholder` 3-state logic**:
+- `"loading"` — shows gray circle + person icon, image rendered at `opacity: 0`
+- `"loaded"` — image fades in (`opacity: 1`), gray circle hidden
+- `"error"` — shows gray circle + person icon (same as no `src`)

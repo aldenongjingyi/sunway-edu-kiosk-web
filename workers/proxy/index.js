@@ -60,6 +60,7 @@ export default {
     const headers = new Headers(upstream.headers);
     headers.set("Access-Control-Allow-Origin", corsOrigin);
     headers.delete("Content-Encoding"); // let CF handle encoding
+    headers.delete("Content-Length"); // upstream uses chunked; avoid CF setting wrong length
 
     return new Response(upstream.body, {
       status: upstream.status,
