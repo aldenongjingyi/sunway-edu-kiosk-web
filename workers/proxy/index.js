@@ -9,6 +9,7 @@
 
 const ALLOWED_ORIGINS = [
   "https://sgp1.digitaloceanspaces.com",
+  "https://kiosk-sunwayedu.getmallapp.com.sgp1.cdn.digitaloceanspaces.com",
   "https://sunway-edu-kiosk-web.vercel.app",
   "http://localhost:3000",
 ];
