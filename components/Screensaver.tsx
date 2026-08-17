@@ -136,7 +136,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
   // Programmatic slide used by auto-advance timer.
   // Two rAFs ensure state renders at offset=0 before transition kicks in.
   const triggerSlide = (dir: 1 | -1) => {
-    if (nRef.current === 0 || isAnimating.current) return;
+    if (nRef.current < 2 || isAnimating.current) return;
     const w = containerRef.current?.offsetWidth ?? vpWRef.current;
     isAnimating.current = true;
     commitRef.current = dir === 1 ? "next" : "prev";
@@ -152,6 +152,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
 
   const restartTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (nRef.current < 2) return;
     timerRef.current = setInterval(() => triggerSlide(1), 5000);
   };
 
@@ -190,8 +191,8 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     dragStartX.current = null;
     const w = containerRef.current?.offsetWidth ?? vpWRef.current;
 
-    if (Math.abs(delta) < 8) {
-      // Tap — snap back and dismiss
+    if (Math.abs(delta) < 8 || nRef.current < 2) {
+      // Tap (or single slide) — snap back and dismiss
       setSlideAnimate(true);
       setSlideOffset(0);
       onTap();
@@ -200,12 +201,12 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     }
 
     setSlideAnimate(true);
-    if (delta < -SLIDE_THRESHOLD && nRef.current > 0) {
+    if (delta < -SLIDE_THRESHOLD && nRef.current >= 2) {
       isAnimating.current = true;
       commitRef.current = "next";
       setSlideOffset(-w);
       restartTimer();
-    } else if (delta > SLIDE_THRESHOLD && nRef.current > 0) {
+    } else if (delta > SLIDE_THRESHOLD && nRef.current >= 2) {
       isAnimating.current = true;
       commitRef.current = "prev";
       setSlideOffset(w);
@@ -243,6 +244,9 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
     userSelect: "none", pointerEvents: "none",
     display: "block",
   };
+
+  // No kiosklights — show nothing
+  if (n === 0) return null;
 
   // Outside working hours: black fullscreen overlay, cannot be dismissed
   if (!isWorkingHours) {
@@ -289,7 +293,7 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
           background: "#111",
           overflow: "hidden",
           zIndex: 50,
-          cursor: "grab",
+          cursor: n >= 2 ? "grab" : "default",
           touchAction: "none",
           transition: `top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
         }}
@@ -298,46 +302,66 @@ export default function Screensaver({ isExpanded, onTap, isWorkingHours }: Props
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        {/* Inner slider — translates all images together */}
-        <div
-          style={{
-            position: "absolute", inset: 0,
-            transform: `translateX(${slideOffset}px)`,
-            transition: slideAnimate ? `transform ${SLIDE_DURATION}` : "none",
-          }}
-          onTransitionEnd={handleSlideEnd}
-        >
-          {prevSlide && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} style={{ ...imgStyle, left: "-100%" }} />
-          )}
-          {currentSlide ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={currentSlide.image.replace("http:", "https:")}
-              alt={currentSlide.title}
-              draggable={false}
-              onLoad={(e) => {
-                if (!ratioSetRef.current) {
-                  const img = e.currentTarget;
-                  if (img.naturalWidth > 0) {
-                    ratioSetRef.current = true;
-                    setImageRatio(img.naturalHeight / img.naturalWidth);
-                  }
+        {n === 1 ? (
+          // Static — single image, no carousel
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={currentSlide!.image.replace("http:", "https:")}
+            alt={currentSlide!.title}
+            draggable={false}
+            onLoad={(e) => {
+              if (!ratioSetRef.current) {
+                const img = e.currentTarget;
+                if (img.naturalWidth > 0) {
+                  ratioSetRef.current = true;
+                  setImageRatio(img.naturalHeight / img.naturalWidth);
                 }
-              }}
-              style={{ ...imgStyle, left: 0 }}
-            />
-          ) : (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
-            </div>
-          )}
-          {nextSlide && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} style={{ ...imgStyle, left: "100%" }} />
-          )}
-        </div>
+              }
+            }}
+            style={{ ...imgStyle, left: 0 }}
+          />
+        ) : (
+          /* Inner slider — translates all images together */
+          <div
+            style={{
+              position: "absolute", inset: 0,
+              transform: `translateX(${slideOffset}px)`,
+              transition: slideAnimate ? `transform ${SLIDE_DURATION}` : "none",
+            }}
+            onTransitionEnd={handleSlideEnd}
+          >
+            {prevSlide && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} style={{ ...imgStyle, left: "-100%" }} />
+            )}
+            {currentSlide ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={currentSlide.image.replace("http:", "https:")}
+                alt={currentSlide.title}
+                draggable={false}
+                onLoad={(e) => {
+                  if (!ratioSetRef.current) {
+                    const img = e.currentTarget;
+                    if (img.naturalWidth > 0) {
+                      ratioSetRef.current = true;
+                      setImageRatio(img.naturalHeight / img.naturalWidth);
+                    }
+                  }
+                }}
+                style={{ ...imgStyle, left: 0 }}
+              />
+            ) : (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
+              </div>
+            )}
+            {nextSlide && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} style={{ ...imgStyle, left: "100%" }} />
+            )}
+          </div>
+        )}
       </div>
     </>,
     document.body
