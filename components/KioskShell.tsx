@@ -51,7 +51,7 @@ interface FloorOption {
 }
 
 export default function KioskShell() {
-  const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, design } = useDataStore();
+  const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, loaded, design } = useDataStore();
 
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
@@ -68,6 +68,72 @@ export default function KioskShell() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Pull to refresh ────────────────────────────────────────────────────────
+  const PULL_THRESHOLD = 100;
+  const pullStartY = useRef<number | null>(null);
+  const pullProgressRef = useRef(0);
+  const isRefreshingRef = useRef(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pullBarRef = useRef<HTMLDivElement>(null);
+  const pullSpinnerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const setBarHeight = (h: number) => {
+      if (pullBarRef.current) pullBarRef.current.style.height = `${h}px`;
+    };
+
+    const onStart = (e: TouchEvent) => {
+      if (isRefreshingRef.current) return;
+      pullStartY.current = e.touches[0].clientY;
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (pullStartY.current === null || isRefreshingRef.current) return;
+      const delta = e.touches[0].clientY - pullStartY.current;
+      if (delta <= 0) { setBarHeight(0); pullProgressRef.current = 0; return; }
+      e.preventDefault();
+      const progress = Math.min(delta / PULL_THRESHOLD, 1);
+      pullProgressRef.current = progress;
+      setBarHeight(progress * 48);
+      if (pullSpinnerRef.current) {
+        pullSpinnerRef.current.style.transform = `rotate(${progress * 270}deg)`;
+        pullSpinnerRef.current.style.opacity = String(progress);
+      }
+    };
+
+    const onEnd = () => {
+      if (pullStartY.current === null) return;
+      pullStartY.current = null;
+      const committed = pullProgressRef.current >= 1;
+      pullProgressRef.current = 0;
+      setBarHeight(0);
+      if (pullSpinnerRef.current) {
+        pullSpinnerRef.current.style.transform = "";
+        pullSpinnerRef.current.style.opacity = "0";
+      }
+      if (committed && !isRefreshingRef.current) {
+        isRefreshingRef.current = true;
+        setIsRefreshing(true);
+        useDataStore.getState().refreshData().then(() => {
+          isRefreshingRef.current = false;
+          setIsRefreshing(false);
+        });
+      }
+    };
+
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd, { passive: true });
+    window.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+  // ──────────────────────────────────────────────────────────────────────────
 
   const isV1 = design === "v1";
 
@@ -92,10 +158,10 @@ export default function KioskShell() {
     return () => clearInterval(interval);
   }, []);
 
-  // Periodic reload — only fires while screensaver is expanded (user idle)
+  // Periodic data refresh — only fires while screensaver is expanded (user idle)
   useEffect(() => {
     if (!screensaverExpanded) return;
-    const id = setTimeout(() => window.location.reload(), RELOAD_INTERVAL_MS);
+    const id = setTimeout(() => useDataStore.getState().refreshData(), RELOAD_INTERVAL_MS);
     return () => clearTimeout(id);
   }, [screensaverExpanded]);
 
@@ -223,6 +289,51 @@ export default function KioskShell() {
     handleClear();
   };
 
+  const cacheWatermark = loaded && lastRefreshed === null && (
+    <div style={{
+      position: "fixed", bottom: 6, left: 0, right: 0, zIndex: 89,
+      textAlign: "center", fontSize: 10, color: "#aaa",
+      pointerEvents: "none", letterSpacing: 0.3,
+    }}>
+      cached version
+    </div>
+  );
+
+  const pullIndicator = (
+    <>
+      {/* Pull bar — height driven by direct DOM mutation for smoothness */}
+      <div ref={pullBarRef} style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 90,
+        height: 0, overflow: "hidden",
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        paddingBottom: 10,
+        background: "rgba(0,34,107,0.07)",
+        pointerEvents: "none",
+      }}>
+        <div ref={pullSpinnerRef} style={{
+          width: 22, height: 22,
+          border: "2px solid var(--navy)",
+          borderTopColor: "transparent",
+          borderRadius: "50%",
+          opacity: 0,
+        }} />
+      </div>
+      {/* Refreshing spinner — React state driven */}
+      {isRefreshing && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 90,
+          height: 48, display: "flex", alignItems: "flex-end", justifyContent: "center",
+          paddingBottom: 10, background: "rgba(0,34,107,0.07)", pointerEvents: "none",
+        }}>
+          <div className="animate-spin" style={{
+            width: 22, height: 22,
+            border: "2px solid var(--navy)", borderTopColor: "transparent", borderRadius: "50%",
+          }} />
+        </div>
+      )}
+    </>
+  );
+
   const overlays = (
     <>
       {/* Screensaver overlay */}
@@ -322,6 +433,8 @@ export default function KioskShell() {
     return (
       <div className="h-full flex flex-col overflow-hidden" style={{ background: "var(--bg)" }} onPointerDown={resetIdle}>
         {overlays}
+        {pullIndicator}
+        {cacheWatermark}
 
         {/* V1 Header: Navy bar with branding + search */}
         <div className="v1-header">
@@ -372,6 +485,8 @@ export default function KioskShell() {
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
       {overlays}
+      {pullIndicator}
+      {cacheWatermark}
 
       {/* Search bar */}
       <div className="flex items-center gap-2 px-4 pt-8 pb-2 flex-shrink-0">

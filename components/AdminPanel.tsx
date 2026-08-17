@@ -21,7 +21,7 @@ function minutesToTime(mins: number): string {
 }
 
 export default function AdminPanel({ onClose }: Props) {
-  const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, lastRefreshed, lastStaffRefreshed, loadData, loadStaff, design, setDesign } = useDataStore();
+  const { loaded, staffLoaded, locations, nodes, levels, staffs, highlights, trendings, lastRefreshed, lastStaffRefreshed, design, setDesign } = useDataStore();
 
   const [workingStart, setWorkingStart] = useState(() =>
     minutesToTime(parseInt(localStorage?.getItem(WORKING_START_KEY) ?? "450")) // 7:30
@@ -65,11 +65,8 @@ export default function AdminPanel({ onClose }: Props) {
 
   const handleClearCache = async () => {
     setCacheStatus("Refreshing data...");
-    // Force re-fetch by resetting loaded flags in store
-    useDataStore.setState({ loaded: false, staffLoaded: false, locations: [], staffs: [], highlights: [], trendings: [] });
     try {
-      await loadData();
-      await loadStaff();
+      await useDataStore.getState().refreshData();
       setCacheStatus("Data refreshed successfully.");
     } catch {
       setCacheStatus("Refresh failed.");

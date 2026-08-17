@@ -1,6 +1,7 @@
 "use client";
 import { create } from "zustand";
 import type { Category, Highlight, KioskData, Level, Location, Node, Staff, Trending } from "./types";
+import { hdx } from "./hdx";
 
 interface DataStore {
   levels: Record<number, Level>;
@@ -16,16 +17,69 @@ interface DataStore {
   lastStaffRefreshed: Date | null;
   design: "default" | "v1";
   setDesign: (d: "default" | "v1") => void;
-  loadData: () => Promise<void>;
-  loadStaff: () => Promise<void>;
+  loadData: (force?: boolean) => Promise<void>;
+  loadStaff: (force?: boolean) => Promise<void>;
+  refreshData: () => Promise<void>;
 }
 
 const DESIGN_KEY = "admin.design";
+const KIOSK_CACHE_KEY = "kiosk.data.cache";
+const STAFF_CACHE_KEY = "kiosk.staff.cache";
+
+function processKioskData(data: KioskData) {
+  const sortedLevels = [...data.levels].sort((a, b) => b.position - a.position);
+  const levelsMap: Record<number, Level> = {};
+  sortedLevels.forEach((l, i) => { levelsMap[l.id] = { ...l, ordinal: i }; });
+
+  const categoriesMap: Record<number, Category> = {};
+  data.categories.forEach(c => { categoriesMap[c.id] = c; });
+
+  const locations = data.locations
+    .filter(l => l.latitude === 0 && l.longitude === 0)
+    .map(l => {
+      const categories_ = data.categories.filter(c => l.categories.includes(c.id));
+      const levelSet = new Set<Level>();
+      data.nodes.forEach(n => {
+        if (n.location === l.id && levelsMap[n.level]) levelSet.add(levelsMap[n.level]);
+      });
+      const sortedNodeLevels = Array.from(levelSet).sort((a, b) => b.position - a.position);
+      const levelTitles = sortedNodeLevels.length === 1
+        ? [sortedNodeLevels[0].title]
+        : sortedNodeLevels.map(lv => lv.label);
+      return { ...l, categories_, levelTitles };
+    });
+
+  const highlights = (data.kiosklights as Highlight[])
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+
+  return {
+    levels: levelsMap,
+    categories: categoriesMap,
+    locations,
+    nodes: data.nodes,
+    highlights,
+    trendings: [...data.trendings].sort((a, b) => a.position - b.position),
+  };
+}
+
+function processStaffData(staffs: Staff[], locations: Location[]) {
+  return staffs.map(s => {
+    const loc = locations.find(l => l.venue === s.lotID);
+    const levelTitle = loc?.levelTitles?.join(" / ") ?? "";
+    return { ...s, levelTitle };
+  });
+}
 
 async function fetchGzip(url: string): Promise<unknown> {
   const bust = `&_=${Date.now()}`;
+  const t0 = Date.now();
   const res = await fetch(`https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}${bust}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+  const ms = Date.now() - t0;
+  if (!res.ok) {
+    hdx.addAction("api.fetch.error", { url, status: res.status, ms });
+    throw new Error(`Failed to fetch ${url}`);
+  }
+  hdx.addAction("api.fetch.success", { url, status: res.status, ms });
   return res.json();
 }
 
@@ -47,79 +101,82 @@ export const useDataStore = create<DataStore>((set, get) => ({
     set({ design: d });
   },
 
-  loadData: async () => {
-    if (get().loaded) return;
+  loadData: async (force = false) => {
+    if (get().loaded && !force) return;
     try {
-      const data = await fetchGzip("https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz") as KioskData;
-
-      // Build levels map with ordinal
-      const sortedLevels = [...data.levels].sort((a, b) => b.position - a.position);
-      const levelsMap: Record<number, Level> = {};
-      sortedLevels.forEach((l, i) => { levelsMap[l.id] = { ...l, ordinal: i }; });
-
-      // Build categories map
-      const categoriesMap: Record<number, Category> = {};
-      data.categories.forEach(c => { categoriesMap[c.id] = c; });
-
-      // Build nodes map
-      const nodesMap: Record<number, { level_?: Level; location?: number | null }> = {};
-      data.nodes.forEach(n => { nodesMap[n.id] = { level_: levelsMap[n.level], location: n.location }; });
-
-      // Resolve locations (indoor only: lat/lng == 0)
-      const locations = data.locations
-        .filter(l => l.latitude === 0 && l.longitude === 0)
-        .map(l => {
-          const categories_ = data.categories.filter(c => l.categories.includes(c.id));
-          // find levels via nodes
-          const levelSet = new Set<Level>();
-          data.nodes.forEach(n => {
-            if (n.location === l.id && levelsMap[n.level]) levelSet.add(levelsMap[n.level]);
-          });
-          const sortedNodeLevels = Array.from(levelSet).sort((a, b) => b.position - a.position);
-          const levelTitles = sortedNodeLevels.length === 1
-            ? [sortedNodeLevels[0].title]
-            : sortedNodeLevels.map(lv => lv.label);
-          return { ...l, categories_, levelTitles };
-        });
-
-      // No client-side date filtering — show all highlights as returned by the API.
-      // This matches iOS app behaviour; the CMS is responsible for what's active.
-      const highlights = (data.kiosklights as Highlight[])
-        .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-
-      set({
-        levels: levelsMap,
-        categories: categoriesMap,
-        locations,
-        nodes: data.nodes,
-        highlights,
-        trendings: [...data.trendings].sort((a, b) => a.position - b.position),
-        loaded: true,
-        lastRefreshed: new Date(),
+      // API fetch
+      const raw = await fetchGzip("https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz") as KioskData;
+      // Save to cache on success
+      try { localStorage.setItem(KIOSK_CACHE_KEY, JSON.stringify(raw)); } catch {}
+      const processed = processKioskData(raw);
+      hdx.addAction("data.loaded.live", {
+        locations: processed.locations.length,
+        highlights: processed.highlights.length,
+        trendings: processed.trendings.length,
+        nodes: processed.nodes.length,
       });
+      set({ ...processed, loaded: true, lastRefreshed: new Date() });
     } catch (e) {
-      console.error("Failed to load kiosk data", e);
+      console.error("Failed to load kiosk data, trying cache", e);
+      hdx.addAction("data.load.failed", { error: String(e) });
+      // Offline fallback — load from localStorage cache
+      try {
+        const cached = localStorage.getItem(KIOSK_CACHE_KEY);
+        if (cached) {
+          const raw = JSON.parse(cached) as KioskData;
+          const processed = processKioskData(raw);
+          hdx.addAction("data.loaded.cache", {
+            locations: processed.locations.length,
+            highlights: processed.highlights.length,
+            trendings: processed.trendings.length,
+            nodes: processed.nodes.length,
+          });
+          set({ ...processed, loaded: true, lastRefreshed: null });
+        } else {
+          hdx.addAction("data.cache.miss", {});
+        }
+      } catch (ce) {
+        console.error("Cache load failed", ce);
+        hdx.addAction("data.cache.error", { error: String(ce) });
+      }
     }
   },
 
-  loadStaff: async () => {
-    if (get().staffLoaded) return;
+  refreshData: async () => {
+    await get().loadData(true);
+    await get().loadStaff(true);
+  },
+
+  loadStaff: async (force = false) => {
+    if (get().staffLoaded && !force) return;
     try {
-      const staffs = await fetchGzip(
+      // API fetch
+      const raw = await fetchGzip(
         "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615"
       ) as Staff[];
-
-      // Resolve level from location venue match
-      const locations = get().locations;
-      const resolved = staffs.map(s => {
-        const loc = locations.find(l => l.venue === s.lotID);
-        const levelTitle = loc?.levelTitles?.join(" / ") ?? "";
-        return { ...s, levelTitle };
-      });
-
-      set({ staffs: resolved, staffLoaded: true, lastStaffRefreshed: new Date() });
+      // Save to cache on success
+      try { localStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(raw)); } catch {}
+      const staffs = processStaffData(raw, get().locations);
+      hdx.addAction("staff.loaded.live", { count: staffs.length });
+      set({ staffs, staffLoaded: true, lastStaffRefreshed: new Date() });
     } catch (e) {
-      console.error("Failed to load staff data", e);
+      console.error("Failed to load staff data, trying cache", e);
+      hdx.addAction("staff.load.failed", { error: String(e) });
+      // Offline fallback
+      try {
+        const cached = localStorage.getItem(STAFF_CACHE_KEY);
+        if (cached) {
+          const raw = JSON.parse(cached) as Staff[];
+          const staffs = processStaffData(raw, get().locations);
+          hdx.addAction("staff.loaded.cache", { count: staffs.length });
+          set({ staffs, staffLoaded: true, lastStaffRefreshed: null });
+        } else {
+          hdx.addAction("staff.cache.miss", {});
+        }
+      } catch (ce) {
+        console.error("Staff cache load failed", ce);
+        hdx.addAction("staff.cache.error", { error: String(ce) });
+      }
     }
   },
 }));
