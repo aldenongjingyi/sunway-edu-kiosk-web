@@ -8,11 +8,12 @@ import DepartmentsTab from "./DepartmentsTab";
 import EventsTab from "./EventsTab";
 import SearchResults from "./SearchResults";
 import Screensaver from "./Screensaver";
-import AdminPanel from "./AdminPanel";
+import NodePickerMap from "./NodePickerMap";
 import MapView from "./MapView";
 import type { Category, Staff } from "@/lib/types";
 
 const IDLE_SECONDS = 20;
+const MAP_IDLE_SECONDS = 120; // longer timeout while map is open
 const RELOAD_INTERVAL_MS = 15 * 60 * 1000; // reload every 15 minutes while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
@@ -45,6 +46,7 @@ interface FloorOption {
   levelId: number;
   title: string;
   label: string;
+  code: string;
 }
 
 export default function KioskShell() {
@@ -56,8 +58,9 @@ export default function KioskShell() {
   const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
   const [screensaverExpanded, setScreensaverExpanded] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [showNodePicker, setShowNodePicker] = useState(false);
   const [mapDestinationId, setMapDestinationId] = useState<number | null>(null);
+  const [mapTargetFloorCode, setMapTargetFloorCode] = useState<string | null>(null);
   const [mapMounted, setMapMounted] = useState(false);
   const [notProvisionedAlert, setNotProvisionedAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
@@ -65,6 +68,7 @@ export default function KioskShell() {
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapOpenRef = useRef(false);
 
   // ── Pull to refresh ────────────────────────────────────────────────────────
   const PULL_THRESHOLD = 100;
@@ -140,7 +144,7 @@ export default function KioskShell() {
   useEffect(() => {
     if (sessionStorage.getItem("admin.reopen")) {
       sessionStorage.removeItem("admin.reopen");
-      setShowAdmin(true);
+      setShowNodePicker(true);
     }
     hdx.addAction("ui.shell.mounted");
     loadData().then(() => {
@@ -149,17 +153,22 @@ export default function KioskShell() {
     });
   }, [loadData, loadStaff]);
 
-  // Periodic data refresh — only fires while screensaver is expanded (user idle)
+  // Periodic data refresh — repeats every 15 minutes while screensaver is active
   useEffect(() => {
     if (!screensaverExpanded) return;
-    const id = setTimeout(() => useDataStore.getState().refreshData(), RELOAD_INTERVAL_MS);
-    return () => clearTimeout(id);
+    const id = setInterval(() => useDataStore.getState().refreshData(), RELOAD_INTERVAL_MS);
+    return () => clearInterval(id);
   }, [screensaverExpanded]);
 
-  // Reset idle timer
+  // Keep mapOpenRef in sync so resetIdle can read current map state without deps
+  useEffect(() => { mapOpenRef.current = mapDestinationId !== null; }, [mapDestinationId]);
+
+  // Reset idle timer — uses longer timeout while map is open
   const resetIdle = useCallback(() => {
     if (idleRef.current) clearTimeout(idleRef.current);
+    const seconds = mapOpenRef.current ? MAP_IDLE_SECONDS : IDLE_SECONDS;
     idleRef.current = setTimeout(() => {
+      hdx.addAction("ui.screensaver.expand", { source: mapOpenRef.current ? "map" : "main", idleSeconds: seconds });
       setScreensaverExpanded(true);
       setQuery("");
       setFilterCategory(null);
@@ -170,7 +179,7 @@ export default function KioskShell() {
       setNotProvisionedAlert(false);
       setFloorPicker(null);
       inputRef.current?.blur();
-    }, IDLE_SECONDS * 1000);
+    }, seconds * 1000);
   }, []);
 
   // Track any user interaction
@@ -191,7 +200,7 @@ export default function KioskShell() {
 
   const handleQueryChange = (val: string) => {
     if (val === ADMIN_CODE) {
-      setShowAdmin(true);
+      setShowNodePicker(true);
       setQuery("");
       inputRef.current?.blur();
       return;
@@ -246,7 +255,7 @@ export default function KioskShell() {
     resetIdle();
   };
 
-  const openMap = (locationId: number) => {
+  const openMap = (locationId: number, locationTitle: string) => {
     // Check kiosk is provisioned
     const rawNodeId = typeof window !== "undefined" ? localStorage.getItem(KIOSK_NODE_KEY) : null;
     if (!rawNodeId) {
@@ -262,16 +271,14 @@ export default function KioskShell() {
       if (!seenLevels.has(node.level)) {
         seenLevels.add(node.level);
         const level = levels[node.level];
-        if (level) floors.push({ levelId: node.level, title: level.title, label: level.label });
+        if (level) floors.push({ levelId: node.level, title: level.title, label: level.label, code: level.code });
       }
     }
-
-    const locationTitle = locations.find(l => l.id === locationId)?.title ?? "";
-    hdx.addAction("ui.map.navigate", { destinationId: locationId, locationTitle });
 
     if (floors.length >= 2) {
       setFloorPicker({ locationId, floors });
     } else {
+      hdx.addAction("ui.map.navigate", { destinationId: locationId, locationTitle });
       setMapDestinationId(locationId);
       setMapMounted(true);
     }
@@ -280,20 +287,25 @@ export default function KioskShell() {
 
   const handleLocationSelect = (id: number) => {
     const loc = locations.find(l => l.id === id);
-    hdx.addAction("ui.location.select", { locationId: id, locationTitle: loc?.title ?? "" });
-    openMap(id);
+    const locationTitle = loc?.title ?? "";
+    hdx.addAction("ui.location.tap", { locationId: id, locationTitle });
+    openMap(id, locationTitle);
   };
 
   const handleStaffSelect = (s: Staff) => {
     hdx.addAction("ui.staff.select", { staffName: s.fullName, department: s.department, designation: s.designation });
     const loc = locations.find(l => l.venue === s.lotID);
-    if (loc) openMap(loc.id);
+    if (loc) {
+      hdx.addAction("ui.location.tap", { locationId: loc.id, locationTitle: loc.title });
+      openMap(loc.id, loc.title);
+    }
     resetIdle();
   };
 
   const handleMapClose = () => {
     hdx.addAction("ui.map.close");
     setMapDestinationId(null);
+    setMapTargetFloorCode(null);
     resetIdle();
   };
 
@@ -353,11 +365,11 @@ export default function KioskShell() {
       {/* Screensaver overlay */}
       <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} />
 
-      {/* Admin panel */}
-      {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); setQuery(""); }} />}
+      {/* Node picker */}
+      {showNodePicker && <NodePickerMap onClose={() => { setShowNodePicker(false); setQuery(""); }} />}
 
       {/* Map overlay — kept mounted once shown so it doesn't re-fetch on every open */}
-      {mapMounted && <MapView destinationId={mapDestinationId} onClose={handleMapClose} />}
+      {mapMounted && <MapView destinationId={mapDestinationId} targetFloorCode={mapTargetFloorCode} onClose={handleMapClose} />}
 
       {/* "Not provisioned" alert */}
       {notProvisionedAlert && (
@@ -402,7 +414,10 @@ export default function KioskShell() {
                   className="w-full py-3 text-[17px]"
                   style={{ color: "#007aff" }}
                   onClick={() => {
+                    const locTitle = locations.find(l => l.id === floorPicker.locationId)?.title ?? "";
+                    hdx.addAction("ui.map.navigate", { destinationId: floorPicker.locationId, locationTitle: locTitle, floorCode: floor.code });
                     setMapDestinationId(floorPicker.locationId);
+                    setMapTargetFloorCode(floor.code);
                     setMapMounted(true);
                     setFloorPicker(null);
                     resetIdle();

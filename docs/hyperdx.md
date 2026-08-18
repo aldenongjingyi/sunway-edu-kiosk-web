@@ -20,6 +20,7 @@ All events are sent manually via `hdx.addAction()` — no auto-instrumentation. 
 
 | Event | Source | Props | Notes |
 |---|---|---|---|
+| `ui.screensaver.expand` | `KioskShell.tsx` | `source`, `idleSeconds` | Idle timeout fired — `source`: `"main"` (20s) or `"map"` (120s) |
 | `ui.screensaver.dismiss` | `KioskShell.tsx` | — | User taps to dismiss screensaver |
 
 ### Navigation
@@ -42,8 +43,8 @@ All events are sent manually via `hdx.addAction()` — no auto-instrumentation. 
 
 | Event | Source | Props | Notes |
 |---|---|---|---|
-| `ui.location.select` | `KioskShell.tsx` | `locationId`, `locationTitle` | User taps a location in the list |
-| `ui.map.navigate` | `KioskShell.tsx` | `destinationId`, `locationTitle` | Wayfinder route triggered |
+| `ui.location.tap` | `KioskShell.tsx` | `locationId`, `locationTitle` | User taps a location (always — even if floor picker is cancelled) |
+| `ui.map.navigate` | `KioskShell.tsx` | `destinationId`, `locationTitle`, `floorCode`? | Map actually opened — `floorCode` present only when floor picker was used |
 | `ui.map.close` | `KioskShell.tsx` | — | User closes the map panel |
 
 ### Staff
@@ -120,5 +121,5 @@ Props must be `string | number | boolean`. Use dot-notation names: `noun.verb` (
 ## TODO
 
 - [ ] **`ui.search.result.select`** — currently `ui.location.select` fires for both tapping a search result and navigating directly to a location. Add a separate event (or a `source: "search" | "direct"` prop) to distinguish intent.
-- [ ] **`ui.screensaver.expand`** — track when idle timeout fires and the screensaver expands. Useful for knowing how often users go idle and at what times of day.
+- [x] **`ui.screensaver.expand`** — implemented with `source: "main" | "map"` and `idleSeconds` props.
 - [ ] **Kiosk device identity** — call `HyperDX.setGlobalAttributes({ kioskNodeId })` after reading `localStorage.getItem("admin.kiosk.nodeId")` on app mount. Lets you filter all HyperDX events by physical device when multiple kiosks are deployed.

@@ -4,9 +4,12 @@ import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 interface Props {
   destinationId: number | null;
+  targetFloorCode?: string | null;
   onClose: () => void;
 }
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
+// Default node used when no kiosk location is provisioned (testing only)
+const DEFAULT_NODE_ID = "3107";
 const SCRIPT_URL = process.env.NEXT_PUBLIC_WAYFINDER_URL ||
   "/wayfinder-map.min.js";
 const DATA_URL = "https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz";
@@ -19,10 +22,12 @@ function ensureScript() {
   s.setAttribute("data-wayfinder-script", "1");
   document.head.appendChild(s);
 }
-export default function MapView({ destinationId, onClose }: Props) {
+export default function MapView({ destinationId, targetFloorCode, onClose }: Props) {
   const { nodes } = useDataStore();
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  const targetFloorCodeRef = useRef(targetFloorCode);
+  useEffect(() => { targetFloorCodeRef.current = targetFloorCode; }, [targetFloorCode]);
   const mapRef = useRef<HTMLElement>(null);
   useEffect(() => { ensureScript(); }, []);
   useEffect(() => {
@@ -56,37 +61,62 @@ export default function MapView({ destinationId, onClose }: Props) {
             z-index: 9999;
           }
           .wayfinder-locate-button { position: relative; }
-          /* Level buttons: navy fill, white text, full circle (matches iOS MapButton) */
+
+          /* Level buttons: styled as small neutral indicator dots — no labels,
+             no implied numbering (campus has multiple buildings with different floor names). */
           .wayfinder-level-button {
-            background-color: #00226B !important;
-            color: #ffffff !important;
+            width: 10px !important;
+            height: 10px !important;
+            min-width: 10px !important;
+            min-height: 10px !important;
             border-radius: 50% !important;
+            background-color: rgba(0, 0, 0, 0.18) !important;
+            border: none !important;
+            font-size: 0 !important;
+            color: transparent !important;
+            padding: 0 !important;
+            overflow: hidden !important;
           }
-          /* Active level button: light blue (matches iOS selectedColor #6E96FF) */
           .wayfinder-level-button[data-active='true'] {
-            background-color: #6E96FF !important;
+            background-color: rgba(0, 0, 0, 0.6) !important;
+            width: 10px !important;
+            height: 10px !important;
           }
-          /* Locate buttons: full circle, white bg, dark icon (matches iOS) */
+
+          /* Always show locate controls — new engine hides them until a mode is set */
+          .wayfinder-locate-controls {
+            display: flex !important;
+          }
+          /* Show you-are-here button (new engine hides by default; old engine always showed it) */
+          .wayfinder-locate-controls [data-action='locate-here'] {
+            display: grid !important;
+          }
+          /* Hide start button — redundant with you-are-here (same kiosk node location) */
+          .wayfinder-locate-controls [data-action='locate-start'] {
+            display: none !important;
+          }
+          /* Always show lift/escalator connectors */
+          .wayfinder-locate-button--connector {
+            display: grid !important;
+          }
+
+          /* Locate buttons: engine changed to border-radius:12px — restore circle */
           .wayfinder-locate-button {
             border-radius: 50% !important;
             background-color: #ffffff !important;
           }
-          /* Hide "You Are Here" locate button — kiosk is fixed, redundant with walker indicator */
-          button[data-action="locate-here"] {
-            display: none !important;
-          }
-          /* Force icon to black so it's visible on white background */
+          /* Force icons dark on white background */
           .wayfinder-locate-button img {
             filter: brightness(0) !important;
           }
-          /* Make level selector fill the control rail height so overflow-y:auto has a definite
-             size to scroll within. The control rail already has top+bottom absolute positioning
-             giving it a definite height; align-self:stretch inherits that height.
-             The wayfinder clears max-height on desktop (>768px), so we can't rely on it. */
+
+          /* Level selector: fill control rail height for scrolling; tighten for dot style */
           .wayfinder-level-selector {
             align-self: stretch !important;
             max-height: none !important;
             overflow-y: auto !important;
+            gap: 8px !important;
+            padding: 8px 0 !important;
           }
         `;
         try {
@@ -149,13 +179,20 @@ export default function MapView({ destinationId, onClose }: Props) {
           const ep = d?.endNode?.point;
           if (sf && ef && sp && ep && isFinite(sp.x) && isFinite(sp.y) && isFinite(ep.x) && isFinite(ep.y)) {
             const spx = sp.x, spy = sp.y;
+            const epx = ep.x, epy = ep.y;
+            // If the user picked a specific floor, show that floor centered on the destination.
+            // Otherwise show the start floor (you-are-here) first.
+            // Delay lets wayfinder finish its own post-route centering before we override.
             setTimeout(() => {
               try {
                 const el = map as HTMLElement & { setFloor: (c: string) => void; centerOn: (x: number, y: number, o?: object) => void };
-                el.setFloor(sf);
-                el.centerOn(spx, spy, { animate: true, scale: 3 });
+                const floorCode = targetFloorCodeRef.current ?? sf;
+                const cx = targetFloorCodeRef.current ? epx : spx;
+                const cy = targetFloorCodeRef.current ? epy : spy;
+                el.setFloor(floorCode);
+                el.centerOn(cx, cy, { animate: true, scale: 3 });
               } catch (_) {}
-            }, 0);
+            }, 600);
           }
         } catch (_) {}
       });
@@ -193,7 +230,7 @@ export default function MapView({ destinationId, onClose }: Props) {
       } catch (_) {}
     };
     const navigate = () => {
-      const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
+      const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY) ?? DEFAULT_NODE_ID;
       if (rawNodeId) {
         const kioskNode = nodesRef.current.find(n => n.id === Number(rawNodeId));
         if (kioskNode?.location) {
@@ -220,8 +257,8 @@ export default function MapView({ destinationId, onClose }: Props) {
     }
   }, [destinationId]); // nodesRef used instead of nodes to avoid double-navigation
   const kioskNodeId = typeof window !== "undefined"
-    ? (localStorage.getItem(KIOSK_NODE_KEY) ?? undefined)
-    : undefined;
+    ? (localStorage.getItem(KIOSK_NODE_KEY) ?? DEFAULT_NODE_ID)
+    : DEFAULT_NODE_ID;
   const content = (
     <div
       className="fixed inset-0 z-[60] bg-white"
