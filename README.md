@@ -40,6 +40,22 @@ IndoorCMS API ─────┐
 - API calls always include `&_=<timestamp>` to bust CDN/proxy caches
 - Data is **never filtered by device time** — all filtering uses API-provided fields only
 
+### Location filtering
+
+Locations are filtered at the data layer in `processKioskData` (`lib/store.ts`) — all UI components automatically see only valid locations. Three conditions must all pass:
+
+| Filter | Reason |
+|---|---|
+| `latitude === 0 && longitude === 0` | Indoor only — outdoor locations excluded |
+| `kind === "FACILITY"` | Only FACILITY type shown — STAIR (221) and LIFT (107) kinds excluded |
+| Has at least one node | Must be mapped on the floor plan — unmapped locations cannot be navigated to |
+
+This matches the filtering logic in both the iOS kiosk (`DataManager.swift` + `ContentViewController.swift`) and the Flutter MyCampus app (`datas.dart` + `categories_list.dart`). Currently **822 of 1,204 locations** pass all three filters.
+
+When a location is updated in IndoorCMS (node assigned, kind changed to FACILITY), it becomes visible automatically on the next data refresh — no code change required.
+
+> **Note**: The node provisioner (`NodePickerMap`) is unaffected — it renders all map nodes as dots regardless of their location kind, so the admin can position the kiosk anywhere on the floor plan.
+
 ---
 
 ## Data Flow
