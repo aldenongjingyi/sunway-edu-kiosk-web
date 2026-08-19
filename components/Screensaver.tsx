@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 
@@ -18,8 +18,8 @@ const VARIANT: 1 | 2 | 3 | 4 = 3;
 
 const SHADOW = "0 8px 32px rgba(0,0,0,0.35)";
 const RADIUS = 16;
-// Smooth spring — fluid deceleration with a very slight overshoot, no jarring size dip
-const SPRING = "0.65s cubic-bezier(0.25, 1.1, 0.5, 1)";
+// Smooth ease — fluid deceleration, no overshoot
+const SPRING = "0.4s cubic-bezier(0.4, 0, 0.2, 1)";
 const THUMB_PX = 120; // collapsed thumbnail width in px
 const SLIDE_THRESHOLD = 50; // min drag distance (px) to commit a slide
 const SLIDE_DURATION = "0.42s ease-out";
@@ -49,6 +49,9 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
   const firstLoadedRef = useRef(false);
   const isExpandedRef = useRef(isExpanded);
   const containerRef = useRef<HTMLDivElement>(null);
+  // True during the container resize spring animation — blocks drag input.
+  // Using a ref (not state) so no extra render is needed.
+  const isSizingRef = useRef(false);
   const [firstLoaded, setFirstLoaded] = useState(false);
   const loadedUrlsRef = useRef<Set<string>>(new Set());
   const currentIdxRef = useRef(0);
@@ -114,14 +117,20 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
       }
     : { top: "calc(100vh - 180px)", left: "calc(100vw - 140px)", width: "120px", height: "160px", borderRadius: RADIUS };
 
+  // Container always springs between card geometry values (expandedGeometry ↔ collapsedGeometry).
+  // A separate full-screen parent (overflow:hidden) clips expanded carousel slides at screen edges.
+  // This avoids the "zoomed-in crop" effect that occurs when the container is full-screen and
+  // an inner fixed-size card is clipped as the container shrinks.
   const geom = isExpanded ? expandedGeometry : collapsedGeometry;
 
-  // Reset slide state when expand/collapse starts
-  useEffect(() => {
+  // Reset slide state synchronously before browser paint to prevent layout flash.
+  // isSizingRef blocks drag input during the container resize spring animation.
+  useLayoutEffect(() => {
     isAnimating.current = false;
     commitRef.current = null;
     setSlideAnimate(false);
     setSlideOffset(0);
+    isSizingRef.current = true;
   }, [isExpanded]);
 
   // ── Slide logic ───────────────────────────────────────────────────────────
@@ -151,7 +160,8 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
       : (currentIdxRef.current - 1 + nRef.current) % nRef.current;
     const targetUrl = highlightsRef.current[targetIdx]?.image?.replace("http:", "https:");
     if (targetUrl && !loadedUrlsRef.current.has(targetUrl)) return;
-    const w = containerRef.current?.offsetWidth ?? vpWRef.current;
+    // Expanded: slide by full viewport width (screen-edge swipe). Collapsed: slide by thumbnail width.
+    const w = isExpandedRef.current ? vpWRef.current : (containerRef.current?.offsetWidth ?? vpWRef.current);
     isAnimating.current = true;
     commitRef.current = dir === 1 ? "next" : "prev";
     setSlideOffset(0);
@@ -188,7 +198,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
 
   // ── Drag handlers ─────────────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isAnimating.current) return;
+    if (isAnimating.current || isSizingRef.current) return;
     dragStartX.current = e.clientX;
     dragDeltaRef.current = 0;
     isDragging.current = true;
@@ -208,7 +218,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
     isDragging.current = false;
     const delta = dragDeltaRef.current;
     dragStartX.current = null;
-    const w = containerRef.current?.offsetWidth ?? vpWRef.current;
+    const w = isExpandedRef.current ? vpWRef.current : (containerRef.current?.offsetWidth ?? vpWRef.current);
 
     if (Math.abs(delta) < 8 || nRef.current < 2) {
       // Tap (or single slide) — snap back and dismiss
@@ -277,13 +287,16 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
 
   const imgStyle: React.CSSProperties = {
     position: "absolute", top: 0, width: "100%", height: "100%",
-    objectFit: "contain", background: "#111",
+    objectFit: "contain", background: "transparent",
     userSelect: "none", pointerEvents: "none",
     display: "block",
   };
 
   // No kiosklights — show nothing
   if (n === 0) return null;
+
+  // Pixel gap between adjacent slides in the expanded carousel (= screen width)
+  const slideW = vp.w || window.innerWidth;
 
   return createPortal(
     <>
@@ -307,72 +320,113 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
         />
       )}
 
-      {/* Single container — overflow:hidden clips carousel to card bounds */}
-      <div
-        ref={containerRef}
-        style={{
-          position: "fixed",
-          top: geom.top, left: geom.left,
-          width: geom.width, height: geom.height,
-          borderRadius: geom.borderRadius,
-          boxShadow: SHADOW,
-          background: "transparent",
-          overflow: "hidden",
-          zIndex: 50,
-          cursor: n >= 2 ? "grab" : "default",
-          touchAction: "none",
-          opacity: firstLoaded ? 1 : 0,
-          transition: `opacity 0.4s ease, top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        {n === 1 ? (
-          // Static — single image, no carousel
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentSlide!.image.replace("http:", "https:")}
-            alt={currentSlide!.title}
-            draggable={false}
-            onLoad={e => handleImageLoad(e, true)}
-            style={{ ...imgStyle, left: 0, background: "#111" }}
-          />
-        ) : (
-          /* Inner slider — translates all images together */
-          <div
-            style={{
-              position: "absolute", inset: 0,
-              transform: `translateX(${slideOffset}px)`,
-              transition: slideAnimate ? `transform ${SLIDE_DURATION}` : "none",
-            }}
-            onTransitionEnd={handleSlideEnd}
-          >
-            {prevSlide && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "-100%", background: "#111" }} />
-            )}
-            {currentSlide ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={currentSlide.image.replace("http:", "https:")}
-                alt={currentSlide.title}
-                draggable={false}
-                onLoad={e => handleImageLoad(e, true)}
-                style={{ ...imgStyle, left: 0, background: "#111" }}
-              />
-            ) : (
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
+      {/* Full-screen clip parent — overflow:hidden clips expanded slides at screen edges.
+          pointer-events:none lets events fall through to the card container below. */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 50, overflow: "hidden", pointerEvents: "none" }}>
+        {/* Card container — springs between expandedGeometry and collapsedGeometry.
+            overflow:visible when expanded so slides extend to screen edges (parent clips them).
+            overflow:hidden when collapsed to contain thumbnail carousel within card bounds. */}
+        <div
+          ref={containerRef}
+          style={{
+            position: "absolute",
+            top: geom.top, left: geom.left,
+            width: geom.width, height: geom.height,
+            borderRadius: geom.borderRadius,
+            boxShadow: isExpanded ? "none" : SHADOW,
+            background: "transparent",
+            overflow: isExpanded ? "visible" : "hidden",
+            pointerEvents: "auto",
+            cursor: n >= 2 ? "grab" : "default",
+            touchAction: "none",
+            opacity: firstLoaded ? 1 : 0,
+            transition: `opacity 0.4s ease, top ${SPRING}, left ${SPRING}, width ${SPRING}, height ${SPRING}`,
+          }}
+          onTransitionEnd={(e: React.TransitionEvent<HTMLDivElement>) => {
+            // Clear sizing guard once resize animation completes
+            if (e.propertyName === "width") isSizingRef.current = false;
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          {n === 1 ? (
+            isExpanded ? (
+              // Single image, expanded — fills card with rounded corners
+              <div style={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: RADIUS }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={currentSlide!.image.replace("http:", "https:")} alt={currentSlide!.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0 }} />
               </div>
-            )}
-            {nextSlide && (
+            ) : (
+              // Single image, collapsed — fills thumbnail
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "100%", background: "#111" }} />
-            )}
-          </div>
-        )}
+              <img src={currentSlide!.image.replace("http:", "https:")} alt={currentSlide!.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0, background: "transparent" }} />
+            )
+          ) : isExpanded ? (
+            /* Expanded carousel — slides spaced by full viewport width, parent clips at screen edges */
+            <div
+              style={{
+                position: "absolute", inset: 0,
+                transform: `translateX(${slideOffset}px)`,
+                transition: slideAnimate ? `transform ${SLIDE_DURATION}` : "none",
+                pointerEvents: "none",
+              }}
+              onTransitionEnd={handleSlideEnd}
+            >
+              {prevSlide && (
+                <div style={{ position: "absolute", left: -slideW, top: 0, width: "100%", height: "100%", overflow: "hidden", borderRadius: RADIUS }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: 0 }} />
+                </div>
+              )}
+              <div style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", overflow: "hidden", borderRadius: RADIUS }}>
+                {currentSlide ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={currentSlide.image.replace("http:", "https:")} alt={currentSlide.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0 }} />
+                ) : (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
+                  </div>
+                )}
+              </div>
+              {nextSlide && (
+                <div style={{ position: "absolute", left: slideW, top: 0, width: "100%", height: "100%", overflow: "hidden", borderRadius: RADIUS }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: 0 }} />
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Collapsed carousel — images fill thumbnail container (original behaviour) */
+            <div
+              style={{
+                position: "absolute", inset: 0,
+                transform: `translateX(${slideOffset}px)`,
+                transition: slideAnimate ? `transform ${SLIDE_DURATION}` : "none",
+                pointerEvents: "none",
+              }}
+              onTransitionEnd={handleSlideEnd}
+            >
+              {prevSlide && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "-100%", background: "transparent" }} />
+              )}
+              {currentSlide ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={currentSlide.image.replace("http:", "https:")} alt={currentSlide.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0, background: "transparent" }} />
+              ) : (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
+                </div>
+              )}
+              {nextSlide && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "100%", background: "transparent" }} />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </>,
     document.body
