@@ -50,7 +50,7 @@ export default function NodePickerMap({ onClose }: Props) {
     fetch(url, { cache: "no-store" })
       .then(r => r.json())
       .then((data: MapLevelData[]) => {
-        const sorted = [...data].sort((a, b) => a.ordinal - b.ordinal);
+        const sorted = [...data].sort((a, b) => b.ordinal - a.ordinal);
         setMapData(sorted);
         const currentNode = nodes.find(n => String(n.id) === pendingId);
         const currentLevel = currentNode ? Object.values(levels).find(l => l.id === currentNode.level) : undefined;
@@ -199,10 +199,10 @@ export default function NodePickerMap({ onClose }: Props) {
 
   const vw = activeMap?.width  ?? 1;
   const vh = activeMap?.height ?? 1;
-  // Sizes in SVG units — naturally scale with zoom level (larger when zoomed in = easier to tap)
-  const dotR      = vw * 0.008;
-  const dotStroke = vw * 0.002;
-  const hitR      = vw * 0.025;
+  // iOS NodeView: 33pt diameter, position = node.x * 3072, so radius in map units = 16.5 / 3072
+  const dotR      = 16.5 / 3072;  // ≈ 0.00537 — exact iOS match
+  const dotStroke = 1.0  / 3072;  // 1pt border in map units
+  const hitR      = dotR * 3;     // tap target ~3× dot radius
 
   const isDirty = pendingId !== savedId;
 
@@ -264,15 +264,15 @@ export default function NodePickerMap({ onClose }: Props) {
                   <circle cx={n.x} cy={n.y} r={hitR} fill="transparent" />
                   <circle
                     cx={n.x} cy={n.y}
-                    r={isSelected ? dotR * 1.6 : dotR}
+                    r={dotR}
                     fill={isSelected ? "#00226B" : n.hasLocation ? "#6E96FF" : "none"}
                     stroke={isSelected ? "#fff" : n.hasLocation ? "#00226B" : "#999"}
                     strokeWidth={dotStroke}
                   />
                   {isSelected && (
                     <circle
-                      cx={n.x} cy={n.y} r={dotR * 2.8}
-                      fill="none" stroke="#00226B" strokeWidth={dotStroke} opacity={0.3}
+                      cx={n.x} cy={n.y} r={dotR * 1.6}
+                      fill="none" stroke="#00226B" strokeWidth={dotStroke} opacity={0.4}
                     />
                   )}
                 </g>
@@ -303,14 +303,15 @@ export default function NodePickerMap({ onClose }: Props) {
             <button
               key={tab.code}
               onClick={() => setActiveLevelCode(tab.code)}
-              className="flex items-center justify-center rounded-full shadow-md shrink-0"
+              className="flex items-center justify-center rounded-full shrink-0"
               style={{
-                width: 56, height: 56,
-                backgroundColor: tab.code === activeLevelCode ? "#00226B" : "rgba(60,60,60,0.82)",
+                width: 24, height: 24,
+                minWidth: 24, minHeight: 24,
+                backgroundColor: tab.code === activeLevelCode ? "#6E96FF" : "#fff",
+                border: `1px solid ${tab.code === activeLevelCode ? "#6E96FF" : "rgba(15,23,42,0.2)"}`,
+                boxShadow: "0 6px 18px -12px rgba(15,23,42,0.5)",
               }}
-            >
-              <span className="text-white font-bold text-[13px] leading-tight text-center px-1">{tab.label}</span>
-            </button>
+            />
           ))}
         </div>
       )}
@@ -341,7 +342,7 @@ export default function NodePickerMap({ onClose }: Props) {
             </p>
           )}
           <p className="text-[11px] text-[#c7c7cc] text-center mt-2">
-            Blue dots = named locations · Tap to select · Pinch to zoom
+            Tap a blue dot to set kiosk location · Pinch to zoom
           </p>
         </div>
       </div>
