@@ -12,7 +12,7 @@ export default function StaffRow({ staff, onSelect }: { staff: Staff; onSelect: 
           {staff.levelTitle && (
             <p className="text-[14px] text-[#3c3c43] mt-0.5">{staff.levelTitle}</p>
           )}
-          <p className="text-[13px] text-[#6b6b6b] mt-1"># {staff.ext}</p>
+          {staff.ext && <p className="text-[13px] text-[#6b6b6b] mt-1"># {staff.ext}</p>}
           <p className="text-[13px] text-[#6b6b6b]">{staff.email}</p>
         </div>
         <div className="chevron mt-1" />

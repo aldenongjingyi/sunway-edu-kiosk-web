@@ -31,8 +31,15 @@ function processKioskData(data: KioskData) {
   const categoriesMap: Record<number, Category> = {};
   data.categories.forEach(c => { categoriesMap[c.id] = c; });
 
+  // Only expose locations that have at least one map node — unmapped locations
+  // cannot be navigated to, so they should never appear in the directory.
+  // When a node is added in the CMS, the location automatically becomes visible.
+  const mappedLocationIds = new Set(data.nodes.map(n => n.location).filter(id => id !== null));
+
   const locations = data.locations
     .filter(l => l.latitude === 0 && l.longitude === 0)
+    .filter(l => l.kind === "FACILITY")
+    .filter(l => mappedLocationIds.has(l.id))
     .map(l => {
       const categories_ = data.categories.filter(c => l.categories.includes(c.id));
       const levelSet = new Set<Level>();
