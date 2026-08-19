@@ -182,7 +182,8 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
             const epx = ep.x, epy = ep.y;
             // If the user picked a specific floor, show that floor centered on the destination.
             // Otherwise show the start floor (you-are-here) first.
-            // Delay lets wayfinder finish its own post-route centering before we override.
+            // NOTE: must be called at 0ms (before wayfinder's own post-route centering settles);
+            // a longer delay causes setFloor() to reset the route path on Android WebView.
             setTimeout(() => {
               try {
                 const el = map as HTMLElement & { setFloor: (c: string) => void; centerOn: (x: number, y: number, o?: object) => void };
@@ -192,7 +193,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
                 el.setFloor(floorCode);
                 el.centerOn(cx, cy, { animate: true, scale: 3 });
               } catch (_) {}
-            }, 600);
+            }, 0);
           }
         } catch (_) {}
       });
@@ -233,13 +234,42 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY) ?? DEFAULT_NODE_ID;
       if (rawNodeId) {
         const kioskNode = nodesRef.current.find(n => n.id === Number(rawNodeId));
-        if (kioskNode?.location) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = (map as any).navigateTo({ from: kioskNode.location, to: destinationId });
-          if (result?.success) {
-            // floor-changed handles scroll when floor changes; fall back for same-floor case
-            setTimeout(scrollActiveLevel, 100);
-            return;
+        if (kioskNode) {
+          // Build set of location IDs that are navigable in the wayfinder graph.
+          // Not every IndoorCMS location is in the wayfinder graph — only mapped ones are.
+          let validLocIds: Set<number> | null = null;
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const wfLocs = (map as any).getLocations() as Array<{ id: number }>;
+            if (Array.isArray(wfLocs)) validLocIds = new Set(wfLocs.map(l => l.id));
+          } catch (_) {}
+
+          // Prefer the kiosk node's own location if it's in the wayfinder graph.
+          // Otherwise find the nearest node on the same level whose location is.
+          let fromLocation: number | null =
+            kioskNode.location != null && (!validLocIds || validLocIds.has(kioskNode.location))
+              ? kioskNode.location
+              : null;
+
+          if (!fromLocation) {
+            const candidates = nodesRef.current
+              .filter(n => n.level === kioskNode.level && n.location != null &&
+                           (!validLocIds || validLocIds.has(n.location!)))
+              .sort((a, b) =>
+                Math.hypot(a.x - kioskNode.x, a.y - kioskNode.y) -
+                Math.hypot(b.x - kioskNode.x, b.y - kioskNode.y)
+              );
+            if (candidates.length > 0) fromLocation = candidates[0].location;
+          }
+
+          if (fromLocation) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const result = (map as any).navigateTo({ from: fromLocation, to: destinationId });
+            if (result?.success) {
+              // floor-changed handles scroll when floor changes; fall back for same-floor case
+              setTimeout(scrollActiveLevel, 100);
+              return;
+            }
           }
         }
       }

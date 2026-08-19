@@ -97,9 +97,8 @@ export default function NodePickerMap({ onClose }: Props) {
     containerRef.current?.getBoundingClientRect() ??
     { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
 
-  // Scroll-to-zoom for desktop browsers (not Android WebView)
+  // Scroll-to-zoom
   useEffect(() => {
-    if (IS_WEBVIEW) return;
     const container = containerRef.current;
     if (!container) return;
     const handleWheel = (e: WheelEvent) => {

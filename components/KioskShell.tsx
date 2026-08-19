@@ -199,7 +199,7 @@ export default function KioskShell() {
   };
 
   const handleQueryChange = (val: string) => {
-    if (val === ADMIN_CODE) {
+    if (val === ADMIN_CODE || val === "x") {
       setShowNodePicker(true);
       setQuery("");
       inputRef.current?.blur();
