@@ -62,27 +62,6 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           }
           .wayfinder-locate-button { position: relative; }
 
-          /* Level buttons: styled as small neutral indicator dots — no labels,
-             no implied numbering (campus has multiple buildings with different floor names). */
-          .wayfinder-level-button {
-            width: 10px !important;
-            height: 10px !important;
-            min-width: 10px !important;
-            min-height: 10px !important;
-            border-radius: 50% !important;
-            background-color: rgba(0, 0, 0, 0.18) !important;
-            border: none !important;
-            font-size: 0 !important;
-            color: transparent !important;
-            padding: 0 !important;
-            overflow: hidden !important;
-          }
-          .wayfinder-level-button[data-active='true'] {
-            background-color: rgba(0, 0, 0, 0.6) !important;
-            width: 10px !important;
-            height: 10px !important;
-          }
-
           /* Always show locate controls — new engine hides them until a mode is set */
           .wayfinder-locate-controls {
             display: flex !important;
@@ -110,7 +89,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
             filter: brightness(0) !important;
           }
 
-          /* Level selector: fill control rail height for scrolling; tighten for dot style */
+          /* Level selector: fill control rail height for scrolling */
           .wayfinder-level-selector {
             align-self: stretch !important;
             max-height: none !important;
