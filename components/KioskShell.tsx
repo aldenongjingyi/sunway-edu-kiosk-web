@@ -5,7 +5,7 @@ import { hdx } from "@/lib/hdx";
 import PopularTab from "./PopularTab";
 import FacilitiesTab from "./FacilitiesTab";
 import DepartmentsTab from "./DepartmentsTab";
-import EventsTab from "./EventsTab";
+
 import SearchResults from "./SearchResults";
 import Screensaver from "./Screensaver";
 import NodePickerMap from "./NodePickerMap";
@@ -18,13 +18,12 @@ const RELOAD_INTERVAL_MS = 15 * 60 * 1000; // reload every 15 minutes while scre
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 
-const TABS_DEFAULT = ["Popular Searches", "Facilities / Offices", "Departments / Staffs", "Events"] as const;
-const TABS_V1 = ["Popular Searches", "Facilities / Offices", "Departments", "Events"] as const;
+const TABS_DEFAULT = ["Popular Searches", "Facilities / Offices", "Departments / Staffs"] as const;
+const TABS_V1 = ["Popular Searches", "Facilities / Offices", "Departments"] as const;
 const TAB_LINES_V1: string[][] = [
   ["Popular", "Searches"],
   ["Facilities /", "Offices"],
   ["Departments"],
-  ["Events"],
 ];
 
 // UI design variant: "default" (iOS-style) or "v1" (airport-kiosk style)
@@ -78,6 +77,7 @@ export default function KioskShell() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pullBarRef = useRef<HTMLDivElement>(null);
   const pullSpinnerRef = useRef<HTMLDivElement>(null);
+  const pullEnabledRef = useRef(true);
 
   useEffect(() => {
     const setBarHeight = (h: number) => {
@@ -85,7 +85,7 @@ export default function KioskShell() {
     };
 
     const onStart = (e: TouchEvent) => {
-      if (isRefreshingRef.current) return;
+      if (isRefreshingRef.current || !pullEnabledRef.current) return;
       pullStartY.current = e.touches[0].clientY;
     };
 
@@ -162,6 +162,11 @@ export default function KioskShell() {
 
   // Keep mapOpenRef in sync so resetIdle can read current map state without deps
   useEffect(() => { mapOpenRef.current = mapDestinationId !== null; }, [mapDestinationId]);
+
+  // Disable pull-to-refresh when map or node picker is open
+  useEffect(() => {
+    pullEnabledRef.current = mapDestinationId === null && !showNodePicker;
+  }, [mapDestinationId, showNodePicker]);
 
   // Reset idle timer — uses longer timeout while map is open
   const resetIdle = useCallback(() => {
@@ -454,7 +459,6 @@ export default function KioskShell() {
       {tab === 0 && <PopularTab onSelect={handlePopularSelect} />}
       {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} />}
       {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} />}
-      {tab === 3 && <EventsTab />}
     </>
   );
 
