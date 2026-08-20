@@ -185,29 +185,22 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       });
     };
     const applyYouAreHere = () => {
+      // Re-apply after ready in case the element was connected before React set the prop.
       const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
       if (!rawNodeId) return;
       const kioskNode = nodesRef.current.find(n => n.id === Number(rawNodeId));
       if (!kioskNode) return;
-      // Wayfinder uses location IDs for you-are-here-node-id, not IndoorCMS node IDs.
-      // Use same nearest-valid-location logic as navigate().
-      let locationId: number | null = kioskNode.location ?? null;
-      if (!locationId) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const wfLocs = (map as any).getLocations() as Array<{ id: number }>;
-          const validLocIds = Array.isArray(wfLocs) ? new Set(wfLocs.map(l => l.id)) : null;
-          const candidates = nodesRef.current
-            .filter(n => n.level === kioskNode.level && n.location != null &&
-                         (!validLocIds || validLocIds.has(n.location!)))
-            .sort((a, b) =>
-              Math.hypot(a.x - kioskNode.x, a.y - kioskNode.y) -
-              Math.hypot(b.x - kioskNode.x, b.y - kioskNode.y)
-            );
-          if (candidates.length > 0) locationId = candidates[0].location;
-        } catch (_) {}
+      if (kioskNode.location != null) {
+        map.setAttribute("you-are-here-node-id", String(kioskNode.location));
+        return;
       }
-      if (locationId) map.setAttribute("you-are-here-node-id", String(locationId));
+      const candidates = nodesRef.current
+        .filter(n => n.level === kioskNode.level && n.location != null)
+        .sort((a, b) =>
+          Math.hypot(a.x - kioskNode.x, a.y - kioskNode.y) -
+          Math.hypot(b.x - kioskNode.x, b.y - kioskNode.y)
+        );
+      if (candidates.length > 0) map.setAttribute("you-are-here-node-id", String(candidates[0].location!));
     };
     const setup = () => { applyYouAreHere(); attachTooltips(); routeFloorIndicators(); autoScrollLevel(); };
     if ((map as HTMLElement & { isInitialized?: boolean }).isInitialized) {
@@ -288,9 +281,24 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       map.addEventListener("ready", () => setTimeout(navigate, 0), { once: true });
     }
   }, [destinationId]); // nodesRef used instead of nodes to avoid double-navigation
-  const kioskNodeId = typeof window !== "undefined"
-    ? (localStorage.getItem(KIOSK_NODE_KEY) ?? "")
-    : "";
+  // Wayfinder expects a location ID for you-are-here-node-id, not an IndoorCMS node ID.
+  // Resolve at render time so the attribute is correct before the element initialises.
+  const kioskLocationId = (() => {
+    if (typeof window === "undefined") return "";
+    const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
+    if (!rawNodeId) return "";
+    const kioskNode = nodes.find(n => n.id === Number(rawNodeId));
+    if (!kioskNode) return "";
+    if (kioskNode.location != null) return String(kioskNode.location);
+    // No location on this node — use nearest node on same level that has one
+    const candidates = nodes
+      .filter(n => n.level === kioskNode.level && n.location != null)
+      .sort((a, b) =>
+        Math.hypot(a.x - kioskNode.x, a.y - kioskNode.y) -
+        Math.hypot(b.x - kioskNode.x, b.y - kioskNode.y)
+      );
+    return candidates.length > 0 ? String(candidates[0].location!) : "";
+  })();
   const content = (
     <div
       className="fixed inset-0 z-[60] bg-white"
@@ -324,7 +332,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         level-selector=""
         desktop-render-scale="1500"
         mobile-render-scale="1200"
-        you-are-here-node-id={kioskNodeId}
+        you-are-here-node-id={kioskLocationId}
         control-active-bg-color="#6E96FF"
         control-active-fg-color="#ffffff"
         map-marker-end-bg-color="#00226B"
