@@ -181,6 +181,7 @@ export default function KioskShell() {
       setShowResults(false);
       setTab(0);
       setMapDestinationId(null); // close map on idle
+      setShowNodePicker(false);
       setNotProvisionedAlert(false);
       setFloorPicker(null);
       inputRef.current?.blur();
@@ -204,7 +205,7 @@ export default function KioskShell() {
   };
 
   const handleQueryChange = (val: string) => {
-    if (val === ADMIN_CODE || val === "x") {
+    if (val === ADMIN_CODE) {
       setShowNodePicker(true);
       setQuery("");
       inputRef.current?.blur();
@@ -231,6 +232,7 @@ export default function KioskShell() {
     setFilterDepartment(null);
     setShowResults(false);
     inputRef.current?.blur();
+    resetIdle();
   };
 
   const handlePopularSelect = (text: string) => {
@@ -371,7 +373,7 @@ export default function KioskShell() {
       <Screensaver isExpanded={screensaverExpanded} onTap={handleScreensaverTap} />
 
       {/* Node picker */}
-      {showNodePicker && <NodePickerMap onClose={() => { setShowNodePicker(false); setQuery(""); }} />}
+      {showNodePicker && <NodePickerMap onClose={() => { setShowNodePicker(false); handleClear(); }} />}
 
       {/* Map overlay — kept mounted once shown so it doesn't re-fetch on every open */}
       {mapMounted && <MapView destinationId={mapDestinationId} targetFloorCode={mapTargetFloorCode} onClose={handleMapClose} />}

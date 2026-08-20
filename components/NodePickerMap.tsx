@@ -343,9 +343,17 @@ export default function NodePickerMap({ onClose }: Props) {
               Tap a node to set kiosk location
             </p>
           )}
-          <p className="text-[11px] text-[#c7c7cc] text-center mt-2">
-            Tap a blue dot to set kiosk location · Pinch to zoom
-          </p>
+          <div className="flex items-center justify-center gap-4 mt-2">
+            <span className="flex items-center gap-1.5 text-[11px] text-[#8e8e93]">
+              <span className="inline-block w-3 h-3 rounded-full bg-[#6E96FF] border border-[#00226B] shrink-0" />
+              Has location
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-[#8e8e93]">
+              <span className="inline-block w-3 h-3 rounded-full bg-transparent border border-[#999] shrink-0" />
+              No location
+            </span>
+            <span className="text-[11px] text-[#c7c7cc]">· Pinch to zoom</span>
+          </div>
         </div>
       </div>
     </div>

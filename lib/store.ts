@@ -53,7 +53,9 @@ function processKioskData(data: KioskData) {
       return { ...l, categories_, levelTitles };
     });
 
+  const now = new Date();
   const highlights = (data.kiosklights as Highlight[])
+    .filter(h => new Date(h.display_at) <= now && new Date(h.end_at) > now)
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
 
   return {

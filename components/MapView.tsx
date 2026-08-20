@@ -8,8 +8,6 @@ interface Props {
   onClose: () => void;
 }
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
-// Default node used when no kiosk location is provisioned (testing only)
-const DEFAULT_NODE_ID = "3107";
 const SCRIPT_URL = process.env.NEXT_PUBLIC_WAYFINDER_URL ||
   "/wayfinder-map.min.js";
 const DATA_URL = "https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz";
@@ -210,7 +208,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       } catch (_) {}
     };
     const navigate = () => {
-      const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY) ?? DEFAULT_NODE_ID;
+      const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
       if (rawNodeId) {
         const kioskNode = nodesRef.current.find(n => n.id === Number(rawNodeId));
         if (kioskNode) {
@@ -266,8 +264,8 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
     }
   }, [destinationId]); // nodesRef used instead of nodes to avoid double-navigation
   const kioskNodeId = typeof window !== "undefined"
-    ? (localStorage.getItem(KIOSK_NODE_KEY) ?? DEFAULT_NODE_ID)
-    : DEFAULT_NODE_ID;
+    ? (localStorage.getItem(KIOSK_NODE_KEY) ?? "")
+    : "";
   const content = (
     <div
       className="fixed inset-0 z-[60] bg-white"

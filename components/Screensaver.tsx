@@ -265,6 +265,17 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
     }
   };
 
+  // Mark failed images as "loaded" so triggerSlide can advance past them.
+  // If the current slide fails, still start the timer so the carousel moves on.
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, isCurrent: boolean) => {
+    loadedUrlsRef.current.add(e.currentTarget.src);
+    if (isCurrent && !firstLoadedRef.current) {
+      firstLoadedRef.current = true;
+      setFirstLoaded(true);
+      restartTimer();
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   if (!mounted) return null;
 
@@ -356,12 +367,12 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
               // Single image, expanded — fills card with rounded corners
               <div style={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: RADIUS }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={currentSlide!.image.replace("http:", "https:")} alt={currentSlide!.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0 }} />
+                <img src={currentSlide!.image.replace("http:", "https:")} alt={currentSlide!.title} draggable={false} onLoad={e => handleImageLoad(e, true)} onError={e => handleImageError(e, true)} style={{ ...imgStyle, left: 0 }} />
               </div>
             ) : (
               // Single image, collapsed — fills thumbnail
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={currentSlide!.image.replace("http:", "https:")} alt={currentSlide!.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0, background: "transparent" }} />
+              <img src={currentSlide!.image.replace("http:", "https:")} alt={currentSlide!.title} draggable={false} onLoad={e => handleImageLoad(e, true)} onError={e => handleImageError(e, true)} style={{ ...imgStyle, left: 0, background: "transparent" }} />
             )
           ) : isExpanded ? (
             /* Expanded carousel — slides spaced by full viewport width, parent clips at screen edges */
@@ -377,13 +388,13 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
               {prevSlide && (
                 <div style={{ position: "absolute", left: -slideW, top: 0, width: "100%", height: "100%", overflow: "hidden", borderRadius: RADIUS }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: 0 }} />
+                  <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} onError={e => handleImageError(e, false)} style={{ ...imgStyle, left: 0 }} />
                 </div>
               )}
               <div style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", overflow: "hidden", borderRadius: RADIUS }}>
                 {currentSlide ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={currentSlide.image.replace("http:", "https:")} alt={currentSlide.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0 }} />
+                  <img src={currentSlide.image.replace("http:", "https:")} alt={currentSlide.title} draggable={false} onLoad={e => handleImageLoad(e, true)} onError={e => handleImageError(e, true)} style={{ ...imgStyle, left: 0 }} />
                 ) : (
                   <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
@@ -393,7 +404,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
               {nextSlide && (
                 <div style={{ position: "absolute", left: slideW, top: 0, width: "100%", height: "100%", overflow: "hidden", borderRadius: RADIUS }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: 0 }} />
+                  <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} onError={e => handleImageError(e, false)} style={{ ...imgStyle, left: 0 }} />
                 </div>
               )}
             </div>
@@ -410,11 +421,11 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
             >
               {prevSlide && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "-100%", background: "transparent" }} />
+                <img src={prevSlide.image.replace("http:", "https:")} alt={prevSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} onError={e => handleImageError(e, false)} style={{ ...imgStyle, left: "-100%", background: "transparent" }} />
               )}
               {currentSlide ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={currentSlide.image.replace("http:", "https:")} alt={currentSlide.title} draggable={false} onLoad={e => handleImageLoad(e, true)} style={{ ...imgStyle, left: 0, background: "transparent" }} />
+                <img src={currentSlide.image.replace("http:", "https:")} alt={currentSlide.title} draggable={false} onLoad={e => handleImageLoad(e, true)} onError={e => handleImageError(e, true)} style={{ ...imgStyle, left: 0, background: "transparent" }} />
               ) : (
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin opacity-30" />
@@ -422,7 +433,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
               )}
               {nextSlide && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} style={{ ...imgStyle, left: "100%", background: "transparent" }} />
+                <img src={nextSlide.image.replace("http:", "https:")} alt={nextSlide.title} draggable={false} onLoad={e => handleImageLoad(e, false)} onError={e => handleImageError(e, false)} style={{ ...imgStyle, left: "100%", background: "transparent" }} />
               )}
             </div>
           )}
