@@ -76,14 +76,16 @@ export default function NodePickerMap({ onClose }: Props) {
   const levelTabs = useMemo(() => mapData.map(m => ({ code: m.code, label: m.code })), [mapData]);
 
   const activeNodes = useMemo(() => {
-    if (!activeLevelCode) return [];
+    if (!activeLevelCode || !activeMap) return [];
+    const { width: mw, height: mh } = activeMap;
     return nodes
       .filter(n => levels[n.level]?.code === activeLevelCode)
+      .filter(n => n.x >= 0 && n.x <= mw && n.y >= 0 && n.y <= mh)
       .map(n => {
         const loc = n.location != null ? locations.find(l => l.id === n.location) : undefined;
         return { nodeId: n.id, x: n.x, y: n.y, hasLocation: n.location != null, title: loc?.title ?? "" };
       });
-  }, [nodes, locations, levels, activeLevelCode]);
+  }, [nodes, locations, levels, activeLevelCode, activeMap]);
 
   const pendingNode = useMemo(() => {
     const n = nodes.find(n => String(n.id) === pendingId);
@@ -256,7 +258,7 @@ export default function NodePickerMap({ onClose }: Props) {
               </g>
             ))}
 
-            {/* Node dots — all nodes on this level */}
+            {/* Node dots — filtered to map bounds, matching iOS UIScrollView contentSize clipping */}
             {activeNodes.map(n => {
               const isSelected = String(n.nodeId) === pendingId;
               return (
