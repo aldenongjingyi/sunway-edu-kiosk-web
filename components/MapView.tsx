@@ -184,7 +184,11 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         } catch (_) {}
       });
     };
-    const setup = () => { attachTooltips(); routeFloorIndicators(); autoScrollLevel(); };
+    const applyYouAreHere = () => {
+      const nodeId = localStorage.getItem(KIOSK_NODE_KEY);
+      if (nodeId) map.setAttribute("you-are-here-node-id", nodeId);
+    };
+    const setup = () => { applyYouAreHere(); attachTooltips(); routeFloorIndicators(); autoScrollLevel(); };
     if ((map as HTMLElement & { isInitialized?: boolean }).isInitialized) {
       setup();
     } else {
