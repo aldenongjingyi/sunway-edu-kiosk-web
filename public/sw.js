@@ -11,9 +11,17 @@
 // 2. CMS images — CACHE FIRST
 //    Images rarely change. Served from cache instantly; fetched and cached
 //    on first request. Works offline after first load.
+//
+// 3. Map floor plan (maps_v001.json.gz) — CACHE FIRST
+//    Fetched by the wayfinder engine directly (cross-origin). Cached so the
+//    map renders offline after first use. Keyed without query string so
+//    cache-busting params don't create duplicate entries.
 
 const APP_CACHE = "kiosk-app-v1";
 const IMG_CACHE = "kiosk-images-v1";
+const MAP_CACHE = "kiosk-map-v1";
+
+const MAP_DATA_URL = "https://sunwayedu3-data.indoorcms.com/maps_v001.json.gz";
 
 const IMAGE_ORIGINS = [
   "sunwayedu3-data.indoorcms.com",
@@ -35,6 +43,24 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 
 self.addEventListener("fetch", (event) => {
+  // --- Map floor plan: cache-first, keyed without query string
+  if (event.request.method === "GET" && event.request.url.startsWith(MAP_DATA_URL)) {
+    event.respondWith(
+      caches.open(MAP_CACHE).then(async (cache) => {
+        const cached = await cache.match(MAP_DATA_URL);
+        if (cached) return cached;
+        try {
+          const response = await fetch(event.request);
+          if (response.ok) cache.put(MAP_DATA_URL, response.clone());
+          return response;
+        } catch {
+          return new Response(null, { status: 404 });
+        }
+      })
+    );
+    return;
+  }
+
   // --- CMS images: cache-first
   if (isImageRequest(event.request)) {
     event.respondWith(
