@@ -53,20 +53,22 @@ self.addEventListener("fetch", (event) => {
   }
 
   // --- App shell (same origin): network-first, cache fallback
+  // Timeout after 5s so offline fallback is fast rather than waiting for TCP to give up.
   if (isSameOriginGet(event.request)) {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          if (response.ok) {
-            caches.open(APP_CACHE).then(cache => cache.put(event.request, response.clone()));
-          }
-          return response;
-        })
-        .catch(() =>
-          caches.match(event.request).then(cached =>
-            cached ?? new Response("Offline", { status: 503, statusText: "Offline" })
-          )
-        )
-    );
+    event.respondWith((async () => {
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 5000)
+      );
+      try {
+        const response = await Promise.race([fetch(event.request), timeout]);
+        if (response.ok) {
+          caches.open(APP_CACHE).then(cache => cache.put(event.request, response.clone()));
+        }
+        return response;
+      } catch {
+        const cached = await caches.match(event.request);
+        return cached ?? new Response("Offline", { status: 503, statusText: "Offline" });
+      }
+    })());
   }
 });

@@ -79,14 +79,23 @@ function processStaffData(staffs: Staff[], locations: Location[]) {
 async function fetchGzip(url: string): Promise<unknown> {
   const bust = `&_=${Date.now()}`;
   const t0 = Date.now();
-  const res = await fetch(`https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}${bust}`, { cache: "no-store" });
-  const ms = Date.now() - t0;
-  if (!res.ok) {
-    hdx.addAction("api.fetch.error", { url, status: res.status, ms });
-    throw new Error(`Failed to fetch ${url}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000); // fail fast offline
+  try {
+    const res = await fetch(
+      `https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}${bust}`,
+      { cache: "no-store", signal: controller.signal }
+    );
+    const ms = Date.now() - t0;
+    if (!res.ok) {
+      hdx.addAction("api.fetch.error", { url, status: res.status, ms });
+      throw new Error(`Failed to fetch ${url}`);
+    }
+    hdx.addAction("api.fetch.success", { url, status: res.status, ms });
+    return res.json();
+  } finally {
+    clearTimeout(timer);
   }
-  hdx.addAction("api.fetch.success", { url, status: res.status, ms });
-  return res.json();
 }
 
 export const useDataStore = create<DataStore>((set, get) => ({
