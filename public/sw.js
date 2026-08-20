@@ -1,8 +1,18 @@
-// Kiosk image cache service worker
-// Cache-first strategy for images from known CMS domains.
-// Cached images persist across sessions and work offline.
+// Kiosk service worker
+//
+// Two caching strategies:
+//
+// 1. App shell (HTML, JS, CSS, wayfinder script) — NETWORK FIRST
+//    Always tries the network. On success: serve + update cache.
+//    On failure: serve from cache so the app loads offline.
+//    This means updates are always picked up when online.
+//
+// 2. CMS images — CACHE FIRST
+//    Images rarely change. Served from cache instantly; fetched and cached
+//    on first request. Works offline after first load.
 
-const CACHE_NAME = "kiosk-images-v1";
+const APP_CACHE  = "kiosk-app-v1";
+const IMG_CACHE  = "kiosk-images-v1";
 
 const IMAGE_ORIGINS = [
   "sunwayedu3-data.indoorcms.com",
@@ -16,25 +26,47 @@ function isImageRequest(request) {
     request.destination === "image";
 }
 
+function isSameOriginGet(request) {
+  return request.method === "GET" && new URL(request.url).origin === self.location.origin;
+}
+
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 
 self.addEventListener("fetch", (event) => {
-  if (!isImageRequest(event.request)) return;
+  // --- CMS images: cache-first
+  if (isImageRequest(event.request)) {
+    event.respondWith(
+      caches.open(IMG_CACHE).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        try {
+          const response = await fetch(event.request);
+          if (response.ok) cache.put(event.request, response.clone());
+          return response;
+        } catch {
+          return new Response(null, { status: 404 });
+        }
+      })
+    );
+    return;
+  }
 
-  event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(event.request);
-      if (cached) return cached;
-
-      try {
-        const response = await fetch(event.request);
-        if (response.ok) cache.put(event.request, response.clone());
-        return response;
-      } catch {
-        // Network failed and no cache — return empty 404
-        return new Response(null, { status: 404 });
-      }
-    })
-  );
+  // --- App shell (same origin): network-first, cache fallback
+  if (isSameOriginGet(event.request)) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response.ok) {
+            caches.open(APP_CACHE).then(cache => cache.put(event.request, response.clone()));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then(cached =>
+            cached ?? new Response("Offline", { status: 503, statusText: "Offline" })
+          )
+        )
+    );
+  }
 });
