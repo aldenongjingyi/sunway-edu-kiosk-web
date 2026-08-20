@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
+# Downloaded at build time via prebuild script
+public/wayfinder-map.min.js
