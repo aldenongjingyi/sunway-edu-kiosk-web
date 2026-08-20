@@ -1,18 +1,19 @@
 // Kiosk service worker
 //
-// Two caching strategies:
-//
-// 1. App shell (HTML, JS, CSS, wayfinder script) — NETWORK FIRST
-//    Always tries the network. On success: serve + update cache.
-//    On failure: serve from cache so the app loads offline.
-//    This means updates are always picked up when online.
+// 1. App shell (HTML, JS, CSS) — NETWORK FIRST, cache fallback
+//    Always tries network. On success: serve + update cache.
+//    On failure with cache: serve cached version (offline works after first load).
+//    On failure without cache: reject (no synthetic 503) so Android WebView's
+//    native onReceivedError fires and shows offline.html until network returns.
+//    No timeout — a premature timeout returning 503 was found to trigger
+//    onReceivedError in Android WebView 150, causing an infinite retry loop.
 //
 // 2. CMS images — CACHE FIRST
 //    Images rarely change. Served from cache instantly; fetched and cached
 //    on first request. Works offline after first load.
 
-const APP_CACHE  = "kiosk-app-v1";
-const IMG_CACHE  = "kiosk-images-v1";
+const APP_CACHE = "kiosk-app-v1";
+const IMG_CACHE = "kiosk-images-v1";
 
 const IMAGE_ORIGINS = [
   "sunwayedu3-data.indoorcms.com",
@@ -52,22 +53,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // --- App shell (same origin): network-first, cache fallback
-  // Timeout after 5s so offline fallback is fast rather than waiting for TCP to give up.
+  // --- App shell (same origin): network-first, cache fallback, no synthetic error
   if (isSameOriginGet(event.request)) {
     event.respondWith((async () => {
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 5000)
-      );
       try {
-        const response = await Promise.race([fetch(event.request), timeout]);
+        const response = await fetch(event.request);
         if (response.ok) {
           caches.open(APP_CACHE).then(cache => cache.put(event.request, response.clone()));
         }
         return response;
       } catch {
         const cached = await caches.match(event.request);
-        return cached ?? new Response("Offline", { status: 503, statusText: "Offline" });
+        if (cached) return cached;
+        // No cache and no network — let the promise reject so Android WebView's
+        // native error handling takes over (shows offline.html, retries every 5s).
+        throw new Error("offline, no cache");
       }
     })());
   }

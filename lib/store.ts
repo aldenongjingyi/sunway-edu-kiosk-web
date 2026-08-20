@@ -113,23 +113,10 @@ export const useDataStore = create<DataStore>((set, get) => ({
 
   loadData: async (force = false) => {
     if (get().loaded && !force) return;
-    try {
-      // API fetch
-      const raw = await fetchGzip("https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz") as KioskData;
-      // Save to cache on success
-      try { localStorage.setItem(KIOSK_CACHE_KEY, JSON.stringify(raw)); } catch {}
-      const processed = processKioskData(raw);
-      hdx.addAction("data.loaded.live", {
-        locations: processed.locations.length,
-        highlights: processed.highlights.length,
-        trendings: processed.trendings.length,
-        nodes: processed.nodes.length,
-      });
-      set({ ...processed, loaded: true, lastRefreshed: new Date() });
-    } catch (e) {
-      console.error("Failed to load kiosk data, trying cache", e);
-      hdx.addAction("data.load.failed", { error: String(e) });
-      // Offline fallback — load from localStorage cache
+
+    // Load from cache immediately so UI shows instantly even offline.
+    // Network fetch runs in background and updates if it succeeds.
+    if (!get().loaded) {
       try {
         const cached = localStorage.getItem(KIOSK_CACHE_KEY);
         if (cached) {
@@ -142,13 +129,29 @@ export const useDataStore = create<DataStore>((set, get) => ({
             nodes: processed.nodes.length,
           });
           set({ ...processed, loaded: true, lastRefreshed: null });
-        } else {
-          hdx.addAction("data.cache.miss", {});
         }
       } catch (ce) {
         console.error("Cache load failed", ce);
         hdx.addAction("data.cache.error", { error: String(ce) });
       }
+    }
+
+    // Fetch fresh from network; update store and cache on success.
+    try {
+      const raw = await fetchGzip("https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz") as KioskData;
+      try { localStorage.setItem(KIOSK_CACHE_KEY, JSON.stringify(raw)); } catch {}
+      const processed = processKioskData(raw);
+      hdx.addAction("data.loaded.live", {
+        locations: processed.locations.length,
+        highlights: processed.highlights.length,
+        trendings: processed.trendings.length,
+        nodes: processed.nodes.length,
+      });
+      set({ ...processed, loaded: true, lastRefreshed: new Date() });
+    } catch (e) {
+      console.error("Network fetch failed, using cache", e);
+      hdx.addAction("data.load.failed", { error: String(e) });
+      if (!get().loaded) hdx.addAction("data.cache.miss", {});
     }
   },
 
@@ -159,20 +162,9 @@ export const useDataStore = create<DataStore>((set, get) => ({
 
   loadStaff: async (force = false) => {
     if (get().staffLoaded && !force) return;
-    try {
-      // API fetch
-      const raw = await fetchGzip(
-        "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615"
-      ) as Staff[];
-      // Save to cache on success
-      try { localStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(raw)); } catch {}
-      const staffs = processStaffData(raw, get().locations);
-      hdx.addAction("staff.loaded.live", { count: staffs.length });
-      set({ staffs, staffLoaded: true, lastStaffRefreshed: new Date() });
-    } catch (e) {
-      console.error("Failed to load staff data, trying cache", e);
-      hdx.addAction("staff.load.failed", { error: String(e) });
-      // Offline fallback
+
+    // Load from cache immediately.
+    if (!get().staffLoaded) {
       try {
         const cached = localStorage.getItem(STAFF_CACHE_KEY);
         if (cached) {
@@ -180,13 +172,26 @@ export const useDataStore = create<DataStore>((set, get) => ({
           const staffs = processStaffData(raw, get().locations);
           hdx.addAction("staff.loaded.cache", { count: staffs.length });
           set({ staffs, staffLoaded: true, lastStaffRefreshed: null });
-        } else {
-          hdx.addAction("staff.cache.miss", {});
         }
       } catch (ce) {
         console.error("Staff cache load failed", ce);
         hdx.addAction("staff.cache.error", { error: String(ce) });
       }
+    }
+
+    // Fetch fresh from network.
+    try {
+      const raw = await fetchGzip(
+        "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615"
+      ) as Staff[];
+      try { localStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(raw)); } catch {}
+      const staffs = processStaffData(raw, get().locations);
+      hdx.addAction("staff.loaded.live", { count: staffs.length });
+      set({ staffs, staffLoaded: true, lastStaffRefreshed: new Date() });
+    } catch (e) {
+      console.error("Staff network fetch failed, using cache", e);
+      hdx.addAction("staff.load.failed", { error: String(e) });
+      if (!get().staffLoaded) hdx.addAction("staff.cache.miss", {});
     }
   },
 }));
