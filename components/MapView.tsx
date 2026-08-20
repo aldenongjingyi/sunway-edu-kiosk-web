@@ -154,6 +154,13 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           const ef = d?.endNode?.level?.code as string | undefined;
           const sp = d?.startNode?.point;
           const ep = d?.endNode?.point;
+          // Update you-are-here-node-id with the wayfinder's own internal node ID for the
+          // start node — this is what the locate-here button uses to place the marker.
+          // The attribute is observed, so the engine reacts to the change immediately.
+          const startNodeId = d?.startNode?.id;
+          if (startNodeId != null) {
+            map.setAttribute("you-are-here-node-id", String(startNodeId));
+          }
           if (sf && ef && sp && ep && isFinite(sp.x) && isFinite(sp.y) && isFinite(ep.x) && isFinite(ep.y)) {
             const spx = sp.x, spy = sp.y;
             const epx = ep.x, epy = ep.y;
