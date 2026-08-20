@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
+import { BLOCKED_WAYFINDER_LOCATION_IDS } from "@/lib/blocked-locations";
 interface Props {
   destinationId: number | null;
   targetFloorCode?: string | null;
@@ -10,8 +11,9 @@ interface Props {
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 const SCRIPT_URL = process.env.NEXT_PUBLIC_WAYFINDER_URL ||
   "/wayfinder-map.min.js";
-const DATA_URL = "https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz";
-const MAP_URL  = "https://sunwayedu3-data.indoorcms.com/maps_v001.json.gz";
+const DATA_URL  = "https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz";
+const MAP_URL   = "https://sunwayedu3-data.indoorcms.com/maps_v001.json.gz";
+const PROXY_URL = "https://sunway-kiosk-proxy.sunway-kiosk.workers.dev";
 function ensureScript() {
   if (document.querySelector('[data-wayfinder-script]')) return;
   const s = document.createElement("script");
@@ -28,6 +30,26 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
   useEffect(() => { targetFloorCodeRef.current = targetFloorCode; }, [targetFloorCode]);
   const mapRef = useRef<HTMLElement>(null);
   useEffect(() => { ensureScript(); }, []);
+
+  // Fetch wayfinder data, strip blocked locations, serve as a blob URL so the
+  // engine never renders external pins/labels (gates, outdoor locations, etc.).
+  const [mapDataUrl, setMapDataUrl] = useState<string>("");
+  useEffect(() => {
+    let blobUrl = "";
+    const url = `${PROXY_URL}/?url=${encodeURIComponent(DATA_URL)}&_=${Date.now()}`;
+    fetch(url)
+      .then(r => r.json())
+      .then((data: { locations?: Array<{ id: number }> }) => {
+        if (Array.isArray(data.locations)) {
+          data.locations = data.locations.filter(l => !BLOCKED_WAYFINDER_LOCATION_IDS.has(l.id));
+        }
+        const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+        blobUrl = URL.createObjectURL(blob);
+        setMapDataUrl(blobUrl);
+      })
+      .catch(() => setMapDataUrl(DATA_URL)); // fallback: show all locations
+    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl); };
+  }, []);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -64,12 +86,12 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           .wayfinder-locate-controls {
             display: flex !important;
           }
-          /* Show you-are-here button (new engine hides by default; old engine always showed it) */
-          .wayfinder-locate-controls [data-action='locate-here'] {
+          /* Show start button — centers on kiosk (route start node) */
+          .wayfinder-locate-controls [data-action='locate-start'] {
             display: grid !important;
           }
-          /* Hide start button — redundant with you-are-here (same kiosk node location) */
-          .wayfinder-locate-controls [data-action='locate-start'] {
+          /* Hide you-are-here button — requires wayfinder internal node ID which is unreliable */
+          .wayfinder-locate-controls [data-action='locate-here'] {
             display: none !important;
           }
           /* Always show lift/escalator connectors */
@@ -333,8 +355,8 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       <wayfinder-map
         ref={mapRef}
         className="absolute inset-0 block"
-        data-url={DATA_URL}
-        map-url={MAP_URL}
+        data-url={mapDataUrl || undefined}
+        map-url={mapDataUrl ? MAP_URL : undefined}
         route-mode="lift"
         level-selector=""
         desktop-render-scale="1500"

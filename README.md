@@ -54,6 +54,14 @@ This matches the filtering logic in both the iOS kiosk (`DataManager.swift` + `C
 
 When a location is updated in IndoorCMS (node assigned, kind changed to FACILITY), it becomes visible automatically on the next data refresh — no code change required.
 
+### Wayfinder map location filtering (`lib/blocked-locations.ts`)
+
+The Wayfinder engine renders **every location** in its `data-url` as a label/pin on the map canvas — it has no API to filter by location ID. Outdoor locations (gates, external buildings, off-campus) that are already excluded from the UI would still appear on the map canvas.
+
+**How it works**: `MapView.tsx` fetches the campus data via the CF proxy, removes blocked location IDs from `data.locations`, creates a `Blob` URL from the filtered JSON, and sets that as the wayfinder's `data-url`. The engine accepts plain JSON (it tries `response.json()` before gzip decompression). Falls back to the unfiltered direct URL on fetch failure.
+
+**To hide additional locations**: find the ID at `https://sunwayedu3.indoorcms.com/admin/locations/`, append to `BLOCKED_WAYFINDER_LOCATION_IDS` in `lib/blocked-locations.ts`, and redeploy.
+
 > **Note**: The node provisioner (`NodePickerMap`) is unaffected — it renders all map nodes as dots regardless of their location kind, so the admin can position the kiosk anywhere on the floor plan.
 
 ---

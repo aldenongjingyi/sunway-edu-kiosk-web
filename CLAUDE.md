@@ -23,11 +23,16 @@ Matches the iOS kiosk (`DataManager.swift` + `ContentViewController.swift`) and 
 
 ### MapView (`components/MapView.tsx`) — Shadow DOM Overrides
 Applied via `adoptedStyleSheets` after the `ready` event. Do not remove these without testing on Elo:
-- **Show `locate-here`, hide `locate-start`**: current configuration. `locate-start` was tested but caused white canvas on Elo along with the `navigateFromYouAreHere` change — reverted together.
+- **Show `locate-start`, hide `locate-here`**: current configuration. `locate-start` centers on the route's start node (= kiosk position) — always correct regardless of provisioned node. `locate-here` uses `you-are-here-node-id` which requires wayfinder's internal routing node ID (not IndoorCMS IDs) and was unreliable. Previous attempt to show `locate-here` was reverted.
 - **Locate button shape**: `border-radius: 50% !important` — engine changed this to `12px` in one update.
 - **Locate button icons**: `filter: brightness(0) !important` — dark icons on white bg.
 - **Connector buttons**: `display: grid !important` — always show lift/escalator.
 - **Level selector**: `align-self: stretch; overflow-y: auto; max-height: none` — full-height scrolling.
+
+### Blocking External Locations from the Map (`lib/blocked-locations.ts`)
+The Wayfinder engine renders every location in its `data-url` as a label/pin on the canvas — there is no API to filter by location ID. To hide outdoor/external locations (gates, off-campus buildings, etc.), `MapView.tsx` fetches the data via the CF proxy, strips blocked IDs from `data.locations`, creates a `Blob` URL with the filtered JSON, and passes that as `data-url`. The wayfinder accepts plain JSON (tries `response.json()` before gzip decompression). Falls back to the direct `DATA_URL` on fetch failure.
+
+All blocked IDs live in `lib/blocked-locations.ts` with comments. To add more: append to `BLOCKED_WAYFINDER_LOCATION_IDS` and redeploy.
 
 ### Navigation
 Use `map.navigateTo({ from: fromLocation, to: destinationId })`. **DO NOT use `engine.navigateFromYouAreHere`** — causes white canvas on Elo. If the kiosk node has no location or its location isn't in the wayfinder graph, call `map.getLocations()` and find the nearest node on the same level whose location IS valid. Falls back to `focusLocation(destinationId)` if navigateTo fails.
@@ -38,7 +43,7 @@ Use `map.navigateTo({ from: fromLocation, to: destinationId })`. **DO NOT use `e
 ### When the engine updates — checklist
 1. Download new bundle: `curl -sL "https://maps-sunwayedu.getmallapp.com/wayfinder-map.min.js" -o public/wayfinder-map.min.js`
 2. Grep for key shadow DOM class names — engine may rename them: `wayfinder-locate-button`, `wayfinder-locate-controls`, `wayfinder-level-selector`, `wayfinder-level-button`
-3. Verify `locate-start` still centers correctly on Elo (not `locate-here`)
+3. Verify `locate-start` button still centers on kiosk (route start) — this is the preferred button, NOT `locate-here`
 4. Verify route path renders on Elo (Android WebView) — may pass in Chrome but fail on device
 5. Verify level selector auto-scrolls to active floor tab
 6. Always re-download the script before `vercel --prod` — Vercel does not do this automatically
