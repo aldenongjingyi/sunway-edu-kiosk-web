@@ -33,9 +33,21 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
 
   // Fetch wayfinder data, strip blocked locations, serve as a blob URL so the
   // engine never renders external pins/labels (gates, outdoor locations, etc.).
+  // Filtered JSON is cached in localStorage so the map works offline after first load.
+  const WAYFINDER_CACHE_KEY = "kiosk.wayfinder.cache";
   const [mapDataUrl, setMapDataUrl] = useState<string>("");
   useEffect(() => {
     let blobUrl = "";
+    const makeBlob = (json: string) => {
+      const blob = new Blob([json], { type: "application/json" });
+      return URL.createObjectURL(blob);
+    };
+    // Serve cached data immediately so map works offline
+    try {
+      const cached = localStorage.getItem(WAYFINDER_CACHE_KEY);
+      if (cached) { blobUrl = makeBlob(cached); setMapDataUrl(blobUrl); }
+    } catch (_) {}
+    // Fetch fresh in background; update cache for next load
     const url = `${PROXY_URL}/?url=${encodeURIComponent(DATA_URL)}&_=${Date.now()}`;
     fetch(url)
       .then(r => r.json())
@@ -43,11 +55,12 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         if (Array.isArray(data.locations)) {
           data.locations = data.locations.filter(l => !BLOCKED_WAYFINDER_LOCATION_IDS.has(l.id));
         }
-        const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-        blobUrl = URL.createObjectURL(blob);
-        setMapDataUrl(blobUrl);
+        const json = JSON.stringify(data);
+        try { localStorage.setItem(WAYFINDER_CACHE_KEY, json); } catch (_) {}
+        // Only init wayfinder from fresh data if cache didn't already do it
+        if (!blobUrl) { blobUrl = makeBlob(json); setMapDataUrl(blobUrl); }
       })
-      .catch(() => setMapDataUrl(DATA_URL)); // fallback: show all locations
+      .catch(() => { if (!blobUrl) setMapDataUrl(DATA_URL); }); // last resort: unfiltered
     return () => { if (blobUrl) URL.revokeObjectURL(blobUrl); };
   }, []);
   useEffect(() => {
