@@ -39,7 +39,15 @@ function isSameOriginGet(request) {
   return request.method === "GET" && new URL(request.url).origin === self.location.origin;
 }
 
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+  // Pre-cache the wayfinder script so the map works offline even before
+  // the user has ever opened the map view (it's lazy-loaded, so it wouldn't
+  // otherwise be in the app cache until the map is opened while online).
+  event.waitUntil(
+    caches.open(APP_CACHE).then(cache => cache.add("/wayfinder-map.min.js").catch(() => {}))
+  );
+});
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 
 self.addEventListener("fetch", (event) => {
