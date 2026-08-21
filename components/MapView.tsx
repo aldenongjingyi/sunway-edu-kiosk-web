@@ -39,7 +39,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
   // on first render — avoids "connecting…" state while waiting for a useEffect.
   const WAYFINDER_CACHE_KEY = "kiosk.wayfinder.cache";
   const blobUrlRef = useRef<string>("");
-  const [mapDataUrl] = useState<string>(() => {
+  const [mapDataUrl, setMapDataUrl] = useState<string>(() => {
     if (typeof window === "undefined") return DATA_URL;
     try {
       const cached = localStorage.getItem(WAYFINDER_CACHE_KEY);
@@ -49,10 +49,11 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         return url;
       }
     } catch (_) {}
-    return DATA_URL; // first run: unfiltered; cache populated by background fetch below
+    return DATA_URL; // first run: wayfinder gets unfiltered data until fetch below completes
   });
   useEffect(() => {
-    // Background refresh: update localStorage cache for next load
+    // Fetch fresh data, filter blocked locations, then update both localStorage and the
+    // live data-url — so external pins are removed on the current render, not just next reload.
     const fetchUrl = `${PROXY_URL}/?url=${encodeURIComponent(DATA_URL)}&_=${Date.now()}`;
     fetch(fetchUrl)
       .then(r => r.json())
@@ -60,7 +61,12 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         if (Array.isArray(data.locations)) {
           data.locations = data.locations.filter(l => !BLOCKED_WAYFINDER_LOCATION_IDS.has(l.id));
         }
-        try { localStorage.setItem(WAYFINDER_CACHE_KEY, JSON.stringify(data)); } catch (_) {}
+        const json = JSON.stringify(data);
+        try { localStorage.setItem(WAYFINDER_CACHE_KEY, json); } catch (_) {}
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+        blobUrlRef.current = url;
+        setMapDataUrl(url);
       })
       .catch(() => {});
     return () => { if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current); };
