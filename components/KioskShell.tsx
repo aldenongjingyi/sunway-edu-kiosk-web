@@ -13,7 +13,7 @@ import MapView from "./MapView";
 import type { Category, Staff } from "@/lib/types";
 
 const IDLE_SECONDS = 30;
-const MAP_IDLE_SECONDS = 120; // longer timeout while map is open
+const MAP_IDLE_SECONDS = 30; // longer timeout while map is open
 const RELOAD_INTERVAL_MS = 15 * 60 * 1000; // reload every 15 minutes while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
