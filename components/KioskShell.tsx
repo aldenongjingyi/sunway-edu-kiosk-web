@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
+import { BLOCKED_WAYFINDER_LOCATION_IDS } from "@/lib/blocked-locations";
 import PopularTab from "./PopularTab";
 import FacilitiesTab from "./FacilitiesTab";
 import DepartmentsTab from "./DepartmentsTab";
@@ -195,6 +196,24 @@ export default function KioskShell() {
     resetIdle();
     return () => events.forEach(e => window.removeEventListener(e, resetIdle));
   }, [resetIdle]);
+
+  // Pre-cache filtered wayfinder location data on every page load so the map
+  // works offline with the correct blocked-locations list even if the map was
+  // never opened in the current session.
+  useEffect(() => {
+    const DATA_URL = "https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz";
+    const PROXY_URL = "https://sunway-kiosk-proxy.sunway-kiosk.workers.dev";
+    const CACHE_KEY = "kiosk.wayfinder.cache";
+    fetch(`${PROXY_URL}/?url=${encodeURIComponent(DATA_URL)}&_=${Date.now()}`)
+      .then(r => r.json())
+      .then((data: { locations?: Array<{ id: number }> }) => {
+        if (Array.isArray(data.locations)) {
+          data.locations = data.locations.filter(l => !BLOCKED_WAYFINDER_LOCATION_IDS.has(l.id));
+        }
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (_) {}
+      })
+      .catch(() => {});
+  }, []);
 
   const handleScreensaverTap = () => {
     setScreensaverExpanded(prev => {
