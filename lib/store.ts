@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import type { Category, Highlight, KioskData, Level, Location, Node, Staff, Trending } from "./types";
 import { hdx } from "./hdx";
+import { BLOCKED_WAYFINDER_LOCATION_IDS } from "./blocked-locations";
 
 interface DataStore {
   levels: Record<number, Level>;
@@ -40,6 +41,7 @@ function processKioskData(data: KioskData) {
     .filter(l => l.latitude === 0 && l.longitude === 0)
     .filter(l => l.kind === "FACILITY")
     .filter(l => mappedLocationIds.has(l.id))
+    .filter(l => !BLOCKED_WAYFINDER_LOCATION_IDS.has(l.id))
     .map(l => {
       const categories_ = data.categories.filter(c => l.categories.includes(c.id));
       const levelSet = new Set<Level>();
