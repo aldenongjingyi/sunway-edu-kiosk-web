@@ -304,6 +304,9 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           }
 
           if (fromLocation) {
+            // Reset previous route state before setting the new one — prevents the engine
+            // from using the old route's endpoints when the connector mode (walk/wheelchair/lift) changes.
+            try { (map as any).resetView(); } catch (_) {}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = (map as any).navigateTo({ from: fromLocation, to: destinationId });
             if (result?.success) {
