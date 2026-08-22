@@ -282,10 +282,6 @@ export default function KioskShell() {
       }
     }
 
-    if (floors.length === 0) {
-      setNoNodeAlert(true);
-      return;
-    }
     if (floors.length >= 2) {
       setFloorPicker({ locationId, floors });
     } else {
