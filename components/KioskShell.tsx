@@ -75,16 +75,9 @@ export default function KioskShell() {
   const pullStartY = useRef<number | null>(null);
   const pullProgressRef = useRef(0);
   const isRefreshingRef = useRef(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const pullBarRef = useRef<HTMLDivElement>(null);
-  const pullSpinnerRef = useRef<HTMLDivElement>(null);
   const pullEnabledRef = useRef(true);
 
   useEffect(() => {
-    const setBarHeight = (h: number) => {
-      if (pullBarRef.current) pullBarRef.current.style.height = `${h}px`;
-    };
-
     const onStart = (e: TouchEvent) => {
       if (isRefreshingRef.current || !pullEnabledRef.current) return;
       pullStartY.current = e.touches[0].clientY;
@@ -93,15 +86,9 @@ export default function KioskShell() {
     const onMove = (e: TouchEvent) => {
       if (pullStartY.current === null || isRefreshingRef.current) return;
       const delta = e.touches[0].clientY - pullStartY.current;
-      if (delta <= 0) { setBarHeight(0); pullProgressRef.current = 0; return; }
+      if (delta <= 0) { pullProgressRef.current = 0; return; }
       e.preventDefault();
-      const progress = Math.min(delta / PULL_THRESHOLD, 1);
-      pullProgressRef.current = progress;
-      setBarHeight(progress * 48);
-      if (pullSpinnerRef.current) {
-        pullSpinnerRef.current.style.transform = `rotate(${progress * 270}deg)`;
-        pullSpinnerRef.current.style.opacity = String(progress);
-      }
+      pullProgressRef.current = Math.min(delta / PULL_THRESHOLD, 1);
     };
 
     const onEnd = () => {
@@ -109,18 +96,11 @@ export default function KioskShell() {
       pullStartY.current = null;
       const committed = pullProgressRef.current >= 1;
       pullProgressRef.current = 0;
-      setBarHeight(0);
-      if (pullSpinnerRef.current) {
-        pullSpinnerRef.current.style.transform = "";
-        pullSpinnerRef.current.style.opacity = "0";
-      }
       if (committed && !isRefreshingRef.current) {
         isRefreshingRef.current = true;
-        setIsRefreshing(true);
         hdx.addAction("ui.refresh.pull");
         useDataStore.getState().refreshData().then(() => {
           isRefreshingRef.current = false;
-          setIsRefreshing(false);
         });
       }
     };
@@ -351,40 +331,7 @@ export default function KioskShell() {
     </div>
   );
 
-  const pullIndicator = (
-    <>
-      {/* Pull bar — height driven by direct DOM mutation for smoothness */}
-      <div ref={pullBarRef} style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 90,
-        height: 0, overflow: "hidden",
-        display: "flex", alignItems: "flex-end", justifyContent: "center",
-        paddingBottom: 10,
-        background: "rgba(0,34,107,0.07)",
-        pointerEvents: "none",
-      }}>
-        <div ref={pullSpinnerRef} style={{
-          width: 22, height: 22,
-          border: "2px solid var(--navy)",
-          borderTopColor: "transparent",
-          borderRadius: "50%",
-          opacity: 0,
-        }} />
-      </div>
-      {/* Refreshing spinner — React state driven */}
-      {isRefreshing && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 90,
-          height: 48, display: "flex", alignItems: "flex-end", justifyContent: "center",
-          paddingBottom: 10, background: "rgba(0,34,107,0.07)", pointerEvents: "none",
-        }}>
-          <div className="animate-spin" style={{
-            width: 22, height: 22,
-            border: "2px solid var(--navy)", borderTopColor: "transparent", borderRadius: "50%",
-          }} />
-        </div>
-      )}
-    </>
-  );
+  const pullIndicator = null;
 
   const overlays = (
     <>
