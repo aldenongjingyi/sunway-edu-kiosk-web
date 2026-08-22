@@ -309,6 +309,8 @@ export default function KioskShell() {
     if (loc) {
       hdx.addAction("ui.location.tap", { locationId: loc.id, locationTitle: loc.title });
       openMap(loc.id, loc.title);
+    } else {
+      setNoNodeAlert(true);
     }
     resetIdle();
   };
