@@ -63,6 +63,7 @@ export default function KioskShell() {
   const [mapTargetFloorCode, setMapTargetFloorCode] = useState<string | null>(null);
   const [mapMounted, setMapMounted] = useState(false);
   const [notProvisionedAlert, setNotProvisionedAlert] = useState(false);
+  const [noNodeAlert, setNoNodeAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -281,6 +282,10 @@ export default function KioskShell() {
       }
     }
 
+    if (floors.length === 0) {
+      setNoNodeAlert(true);
+      return;
+    }
     if (floors.length >= 2) {
       setFloorPicker({ locationId, floors });
     } else {
@@ -361,6 +366,30 @@ export default function KioskShell() {
                 className="w-full py-3 text-[17px] font-medium"
                 style={{ color: "#007aff" }}
                 onClick={() => setNotProvisionedAlert(false)}
+              >
+                Ok
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {noNodeAlert && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+          onClick={() => setNoNodeAlert(false)}
+        >
+          <div className="bg-white rounded-2xl max-w-xs w-full mx-6 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-5 pt-5 pb-4 text-center">
+              <p className="text-[17px] font-semibold text-black mb-2">Oops</p>
+              <p className="text-[13px] text-[#3c3c43]">Navigation is not available for this location.</p>
+            </div>
+            <div style={{ borderTop: "0.5px solid #e5e5ea" }}>
+              <button
+                className="w-full py-3 text-[17px] font-medium"
+                style={{ color: "#007aff" }}
+                onClick={() => setNoNodeAlert(false)}
               >
                 Ok
               </button>
