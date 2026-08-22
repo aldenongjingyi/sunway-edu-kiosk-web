@@ -26,8 +26,10 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
   const { nodes } = useDataStore();
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  // Ref to always-current navigate fn — lets the one-time setup effect re-navigate after connector taps.
+  // Refs to always-current values — let the one-time setup effect access current state.
   const navigateFnRef = useRef<() => void>(() => {});
+  const currentDestRef = useRef<number | null>(destinationId);
+  useEffect(() => { currentDestRef.current = destinationId; }, [destinationId]);
   const targetFloorCodeRef = useRef(targetFloorCode);
   useEffect(() => { targetFloorCodeRef.current = targetFloorCode; }, [targetFloorCode]);
   const mapRef = useRef<HTMLElement>(null);
@@ -167,11 +169,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           if (action === "locate-focus" || action === "locate-here" || action === "locate-start") {
             btn.addEventListener("click", () => setTimeout(scrollActiveLevel, 100), { passive: true });
           }
-          // Connector mode buttons (walk/wheelchair/lift) cause the engine to re-route using its
-          // cached destination, which may be stale. Re-navigate after the engine processes the tap.
-          if (action.startsWith("nav-connector-")) {
-            btn.addEventListener("click", () => setTimeout(() => navigateFnRef.current(), 100), { passive: true });
-          }
+
           let timer: ReturnType<typeof setTimeout> | null = null;
           let tip: HTMLDivElement | null = null;
           const show = () => {
@@ -193,16 +191,23 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       } catch (_) { /* tooltip attachment is non-critical */ }
     };
     const routeFloorIndicators = () => {
+      let correctingRoute = false;
       map.addEventListener("route-found", (e: Event) => {
         try {
           const d = (e as CustomEvent).detail;
+          // If the engine re-routed to the wrong destination (e.g. connector mode tap using
+          // stale cached endpoints), correct it immediately before rendering.
+          const endLocId = d?.endLocation?.id as number | undefined;
+          if (!correctingRoute && currentDestRef.current != null && endLocId != null && endLocId !== currentDestRef.current) {
+            correctingRoute = true;
+            requestAnimationFrame(() => { navigateFnRef.current(); correctingRoute = false; });
+            return;
+          }
+          correctingRoute = false;
           const sf = d?.startNode?.level?.code as string | undefined;
           const ef = d?.endNode?.level?.code as string | undefined;
           const sp = d?.startNode?.point;
           const ep = d?.endNode?.point;
-          // Update you-are-here-node-id with the wayfinder's own internal node ID for the
-          // start node — this is what the locate-here button uses to place the marker.
-          // The attribute is observed, so the engine reacts to the change immediately.
           const startNodeId = d?.startNode?.id;
           if (startNodeId != null) {
             map.setAttribute("you-are-here-node-id", String(startNodeId));
