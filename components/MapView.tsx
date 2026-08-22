@@ -26,6 +26,8 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
   const { nodes } = useDataStore();
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  // Ref to always-current navigate fn — lets the one-time setup effect re-navigate after connector taps.
+  const navigateFnRef = useRef<() => void>(() => {});
   const targetFloorCodeRef = useRef(targetFloorCode);
   useEffect(() => { targetFloorCodeRef.current = targetFloorCode; }, [targetFloorCode]);
   const mapRef = useRef<HTMLElement>(null);
@@ -164,6 +166,11 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           // Scroll level selector to active floor after locate buttons are tapped
           if (action === "locate-focus" || action === "locate-here" || action === "locate-start") {
             btn.addEventListener("click", () => setTimeout(scrollActiveLevel, 100), { passive: true });
+          }
+          // Connector mode buttons (walk/wheelchair/lift) cause the engine to re-route using its
+          // cached destination, which may be stale. Re-navigate after the engine processes the tap.
+          if (action.startsWith("nav-connector-")) {
+            btn.addEventListener("click", () => setTimeout(() => navigateFnRef.current(), 100), { passive: true });
           }
           let timer: ReturnType<typeof setTimeout> | null = null;
           let tip: HTMLDivElement | null = null;
@@ -304,9 +311,6 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           }
 
           if (fromLocation) {
-            // Reset previous route state before setting the new one — prevents the engine
-            // from using the old route's endpoints when the connector mode (walk/wheelchair/lift) changes.
-            try { (map as any).resetView(); } catch (_) {}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = (map as any).navigateTo({ from: fromLocation, to: destinationId });
             if (result?.success) {
@@ -321,6 +325,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       // focusLocation only calls setFloor when floor changes, so always scroll after
       setTimeout(scrollActiveLevel, 100);
     };
+    navigateFnRef.current = navigate;
     if (map.isInitialized) {
       navigate();
     } else {
