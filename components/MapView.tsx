@@ -27,9 +27,14 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   // Refs to always-current values — let the one-time setup effect access current state.
-  const navigateFnRef = useRef<() => void>(() => {});
+  const navigateFnRef = useRef<(connectorConstraint?: string | null) => void>(() => {});
   const currentDestRef = useRef<number | null>(destinationId);
-  useEffect(() => { currentDestRef.current = destinationId; }, [destinationId]);
+  // Track current connector mode so we can reset button visuals on new destination.
+  const connectorModeRef = useRef<string | null>(null);
+  useEffect(() => {
+    currentDestRef.current = destinationId;
+    connectorModeRef.current = null; // reset connector mode when destination changes
+  }, [destinationId]);
   const targetFloorCodeRef = useRef(targetFloorCode);
   useEffect(() => { targetFloorCodeRef.current = targetFloorCode; }, [targetFloorCode]);
   const mapRef = useRef<HTMLElement>(null);
@@ -123,11 +128,20 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           /* Locate buttons: engine changed to border-radius:12px — restore circle */
           .wayfinder-locate-button {
             border-radius: 50% !important;
+          }
+          /* Inactive: white background, dark icon */
+          .wayfinder-locate-button:not([data-active='true']) {
             background-color: #ffffff !important;
           }
-          /* Force icons dark on white background */
-          .wayfinder-locate-button img {
+          .wayfinder-locate-button:not([data-active='true']) img {
             filter: brightness(0) !important;
+          }
+          /* Active (connector toggled on): blue background, white icon */
+          .wayfinder-locate-button[data-active='true'] {
+            background-color: #6E96FF !important;
+          }
+          .wayfinder-locate-button[data-active='true'] img {
+            filter: brightness(0) invert(1) !important;
           }
 
           /* Level selector: fill control rail height for scrolling */
@@ -190,20 +204,42 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         });
       } catch (_) { /* tooltip attachment is non-critical */ }
     };
+    const interceptConnectors = () => {
+      // Intercept connector button (lift/escalator) clicks at the host element in capture
+      // phase. This fires BEFORE the engine's shadow DOM listeners, so stopImmediatePropagation
+      // prevents the engine from processing the click with its stale cached destination (#Ts).
+      // We handle routing ourselves with the always-current currentDestRef / navigateFnRef.
+      map.addEventListener("click", (e: Event) => {
+        try {
+          const btn = e.composedPath().find((el) => {
+            const action = (el as HTMLElement).dataset?.action;
+            return action === "nav-connector-lift" || action === "nav-connector-escalator";
+          }) as HTMLElement | undefined;
+          if (!btn) return;
+
+          e.stopImmediatePropagation();
+
+          const constraint = btn.dataset.action === "nav-connector-lift" ? "lift-only" : "escalator-only";
+          const newMode = connectorModeRef.current === constraint ? null : constraint;
+          connectorModeRef.current = newMode;
+
+          // Update button active states — engine's #Ur won't run since we stopped the event.
+          const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
+          if (shadow) {
+            const liftBtn = shadow.querySelector<HTMLElement>('[data-action="nav-connector-lift"]');
+            const escBtn  = shadow.querySelector<HTMLElement>('[data-action="nav-connector-escalator"]');
+            if (liftBtn) liftBtn.dataset.active = newMode === "lift-only"      ? "true" : "false";
+            if (escBtn)  escBtn.dataset.active  = newMode === "escalator-only" ? "true" : "false";
+          }
+
+          navigateFnRef.current(newMode);
+        } catch (_) {}
+      }, true);
+    };
     const routeFloorIndicators = () => {
-      let correctingRoute = false;
       map.addEventListener("route-found", (e: Event) => {
         try {
           const d = (e as CustomEvent).detail;
-          // If the engine re-routed to the wrong destination (e.g. connector mode tap using
-          // stale cached endpoints), correct it immediately before rendering.
-          const endLocId = d?.endLocation?.id as number | undefined;
-          if (!correctingRoute && currentDestRef.current != null && endLocId != null && endLocId !== currentDestRef.current) {
-            correctingRoute = true;
-            requestAnimationFrame(() => { navigateFnRef.current(); correctingRoute = false; });
-            return;
-          }
-          correctingRoute = false;
           const sf = d?.startNode?.level?.code as string | undefined;
           const ef = d?.endNode?.level?.code as string | undefined;
           const sp = d?.startNode?.point;
@@ -260,7 +296,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         );
       if (candidates.length > 0) map.setAttribute("you-are-here-node-id", String(candidates[0].location!));
     };
-    const setup = () => { applyYouAreHere(); attachTooltips(); routeFloorIndicators(); autoScrollLevel(); };
+    const setup = () => { applyYouAreHere(); attachTooltips(); interceptConnectors(); routeFloorIndicators(); autoScrollLevel(); };
     if ((map as HTMLElement & { isInitialized?: boolean }).isInitialized) {
       setup();
     } else {
@@ -283,7 +319,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         btn?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       } catch (_) {}
     };
-    const navigate = () => {
+    const navigate = (connectorConstraint?: string | null) => {
       const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
       if (rawNodeId) {
         const kioskNode = nodesRef.current.find(n => n.id === Number(rawNodeId));
@@ -317,11 +353,36 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
 
           if (fromLocation) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const result = (map as any).navigateTo({ from: fromLocation, to: destinationId });
+            const navOpts: Record<string, unknown> = { from: fromLocation, to: destinationId };
+            // Only include connectorConstraint when a mode is active — passing null explicitly
+            // is treated differently from omitting it, causing route failure in the engine.
+            if (connectorConstraint != null) navOpts.connectorConstraint = connectorConstraint;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const result = (map as any).navigateTo(navOpts);
             if (result?.success) {
               // floor-changed handles scroll when floor changes; fall back for same-floor case
               setTimeout(scrollActiveLevel, 100);
               return;
+            }
+            // Constrained route failed (e.g. no escalator on this path) — reset button state
+            // and fall back to unconstrained route so a path is always shown.
+            if (connectorConstraint != null) {
+              connectorModeRef.current = null;
+              try {
+                const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
+                if (shadow) {
+                  const liftBtn = shadow.querySelector<HTMLElement>('[data-action="nav-connector-lift"]');
+                  const escBtn  = shadow.querySelector<HTMLElement>('[data-action="nav-connector-escalator"]');
+                  if (liftBtn) liftBtn.dataset.active = "false";
+                  if (escBtn)  escBtn.dataset.active  = "false";
+                }
+              } catch (_) {}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const fallback = (map as any).navigateTo({ from: fromLocation, to: destinationId });
+              if (fallback?.success) {
+                setTimeout(scrollActiveLevel, 100);
+                return;
+              }
             }
           }
         }
