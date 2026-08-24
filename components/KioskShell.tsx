@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
 import { BLOCKED_WAYFINDER_LOCATION_IDS } from "@/lib/blocked-locations";
@@ -77,6 +78,10 @@ export default function KioskShell() {
   const pullProgressRef = useRef(0);
   const isRefreshingRef = useRef(false);
   const pullEnabledRef = useRef(true);
+  const pullSpinnerRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [portalMounted, setPortalMounted] = useState(false);
+  const MAX_TRANSLATE = 72;
 
   useEffect(() => {
     const onStart = (e: TouchEvent) => {
@@ -90,6 +95,15 @@ export default function KioskShell() {
       if (delta <= 0) { pullProgressRef.current = 0; return; }
       e.preventDefault();
       pullProgressRef.current = Math.min(delta / PULL_THRESHOLD, 1);
+      // Rubber-band: page follows finger with dampening, capped at MAX_TRANSLATE
+      const translate = Math.min(delta * 0.55, MAX_TRANSLATE);
+      if (pageRef.current) pageRef.current.style.transform = `translateY(${translate}px)`;
+      // Spinner fades in and rotates as progress builds
+      if (pullSpinnerRef.current) {
+        pullSpinnerRef.current.style.opacity = String(Math.min(pullProgressRef.current * 1.5, 1));
+        (pullSpinnerRef.current.firstElementChild as HTMLElement | null)
+          ?.style.setProperty("transform", `rotate(${pullProgressRef.current * 270}deg)`);
+      }
     };
 
     const onEnd = () => {
@@ -99,10 +113,37 @@ export default function KioskShell() {
       pullProgressRef.current = 0;
       if (committed && !isRefreshingRef.current) {
         isRefreshingRef.current = true;
+        if (pullSpinnerRef.current) {
+          pullSpinnerRef.current.style.opacity = "1";
+          const icon = pullSpinnerRef.current.firstElementChild as HTMLElement | null;
+          if (icon) icon.style.animation = "spin 0.75s linear infinite";
+        }
         hdx.addAction("ui.refresh.pull");
         useDataStore.getState().refreshData().then(() => {
+          if (pageRef.current) {
+            pageRef.current.style.transition = "transform 0.3s ease-out";
+            pageRef.current.style.transform = "translateY(0)";
+          }
+          if (pullSpinnerRef.current) {
+            pullSpinnerRef.current.style.transition = "opacity 0.3s";
+            pullSpinnerRef.current.style.opacity = "0";
+            const icon = pullSpinnerRef.current.firstElementChild as HTMLElement | null;
+            if (icon) icon.style.animation = "none";
+          }
+          setTimeout(() => {
+            if (pageRef.current) pageRef.current.style.transition = "none";
+            if (pullSpinnerRef.current) pullSpinnerRef.current.style.transition = "none";
+          }, 350);
           isRefreshingRef.current = false;
         });
+      } else {
+        // Not committed — snap page back
+        if (pageRef.current) {
+          pageRef.current.style.transition = "transform 0.2s ease-out";
+          pageRef.current.style.transform = "translateY(0)";
+          setTimeout(() => { if (pageRef.current) pageRef.current.style.transition = "none"; }, 220);
+        }
+        if (pullSpinnerRef.current) pullSpinnerRef.current.style.opacity = "0";
       }
     };
 
@@ -117,6 +158,8 @@ export default function KioskShell() {
       window.removeEventListener("touchcancel", onEnd);
     };
   }, []);
+
+  useEffect(() => { setPortalMounted(true); }, []);
   // ──────────────────────────────────────────────────────────────────────────
 
   const isV1 = DESIGN === "v1";
@@ -334,7 +377,24 @@ export default function KioskShell() {
     </div>
   );
 
-  const pullIndicator = null;
+  const pullIndicator = portalMounted ? createPortal(
+    <div
+      ref={pullSpinnerRef}
+      style={{
+        position: "fixed", top: 18, left: 0, right: 0,
+        display: "flex", justifyContent: "center",
+        opacity: 0, zIndex: 9999, pointerEvents: "none",
+      }}
+    >
+      <div style={{
+        width: 32, height: 32, borderRadius: "50%",
+        border: "3px solid #dce3f5",
+        borderTopColor: "var(--navy)",
+        transformOrigin: "50% 50%",
+      }} />
+    </div>,
+    document.body
+  ) : null;
 
   const overlays = (
     <>
@@ -459,10 +519,11 @@ export default function KioskShell() {
 
   if (isV1) {
     return (
-      <div className="h-full flex flex-col overflow-hidden" style={{ background: "var(--bg)" }} onPointerDown={resetIdle}>
+      <div className="relative h-full flex flex-col overflow-hidden" style={{ background: "var(--bg)" }} onPointerDown={resetIdle}>
         {overlays}
         {pullIndicator}
         {cacheWatermark}
+        <div ref={pageRef} className="flex flex-col flex-1 overflow-hidden" style={{ willChange: "transform" }}>
 
         {/* V1 Header: Navy bar with branding + search */}
         <div className="v1-header">
@@ -506,15 +567,17 @@ export default function KioskShell() {
             <p>Since {formatTimestamp(lastStaffRefreshed)}</p>
           </div>
         )}
+        </div>{/* end pageRef */}
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
+    <div className="relative h-full flex flex-col bg-white overflow-hidden" onPointerDown={resetIdle}>
       {overlays}
       {pullIndicator}
       {cacheWatermark}
+      <div ref={pageRef} className="flex flex-col flex-1 overflow-hidden" style={{ willChange: "transform" }}>
 
       {/* Search bar */}
       <div className="flex items-center gap-2 px-4 pt-8 pb-2 flex-shrink-0">
@@ -560,6 +623,7 @@ export default function KioskShell() {
           <p>Version 1.0 Build #15</p>
         </div>
       )}
+      </div>{/* end pageRef */}
     </div>
   );
 }
