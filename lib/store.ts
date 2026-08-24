@@ -70,11 +70,59 @@ function processKioskData(data: KioskData) {
   };
 }
 
+function buildingFromWing(wing: string): string {
+  switch (wing) {
+    case "NORTH":
+    case "SOUTH":
+    case "SB": return "College Building";
+    case "NUB": return "University Building";
+    case "SQ": return "Sunway Square";
+    case "GRADUATE": return "Graduate School";
+    default: return "";
+  }
+}
+
+function floorLabelFromVenue(floor: string, wing: string): string {
+  const isCollege = wing === "NORTH" || wing === "SOUTH" || wing === "SB";
+  if (isCollege) {
+    const map: Record<string, string> = {
+      LG: "Lower Ground", G: "Ground Floor",
+      M1: "Level 1", M2: "Level 2",
+      L1: "Level 3", L2: "Level 4", L3: "Level 5", L4: "Level 6",
+    };
+    return map[floor] ?? floor;
+  }
+  const genericMap: Record<string, string> = {
+    LG: "Lower Ground", LG2: "Lower Ground 2", LG3: "Lower Ground 3",
+    G: "Ground Floor", B2: "Basement 2",
+    M1: "Mezzanine 1", M2: "Mezzanine 2",
+  };
+  if (genericMap[floor]) return genericMap[floor];
+  const m = floor.match(/^L(\d+)$/);
+  if (m) return `Level ${m[1]}`;
+  return floor;
+}
+
+function locationNameFromLotID(lotID: string): string {
+  const segment = lotID.split(".")[4] ?? "";
+  return segment
+    .replace(/_/g, " ")
+    .split(" ")
+    .map(w => /^\([A-Z]+\)$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ")
+    .trim();
+}
+
 function processStaffData(staffs: Staff[], locations: Location[]) {
   return staffs.map(s => {
+    const parts = s.lotID.split(".");
+    const floor = parts[0] ?? "";
+    const wing = parts[1] ?? "";
     const loc = locations.find(l => l.venue === s.lotID);
-    const levelTitle = loc?.levelTitles?.join(" / ") ?? "";
-    return { ...s, levelTitle };
+    const locationTitle = loc?.title ?? locationNameFromLotID(s.lotID);
+    const buildingName = buildingFromWing(wing);
+    const floorLabel = buildingName ? floorLabelFromVenue(floor, wing) : "";
+    return { ...s, locationTitle, buildingName, floorLabel };
   });
 }
 

@@ -74,7 +74,9 @@ export interface Staff {
   photo: string;
   keywords: string;
   // resolved
-  levelTitle?: string;
+  locationTitle?: string;
+  buildingName?: string;
+  floorLabel?: string;
 }
 
 export interface KioskData {
