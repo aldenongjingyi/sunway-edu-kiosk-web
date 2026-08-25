@@ -458,6 +458,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         map-marker-end-bg-color="#00226B"
         map-marker-connector-bg-color="#6E96FF"
         map-label-background-color="transparent"
+        map-marker-start-size="51"
       />
     </div>
   );

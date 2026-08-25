@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "prebuild": "curl -sL 'https://maps-sunwayedu.getmallapp.com/wayfinder-map.min.js' -o public/wayfinder-map.min.js"
+    "prebuild": "echo 'using local engine build (startSize:51 test)'"
   },
   "dependencies": {
     "@hyperdx/browser": "^0.25.1",
