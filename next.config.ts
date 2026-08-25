@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   reactStrictMode: false,
   images: { unoptimized: true },
-  allowedDevOrigins: ["192.168.100.27"],
+  allowedDevOrigins: ["192.168.100.27", "192.168.100.237", "192.168.100.239"],
   // Cache-Control headers are set per-file in scripts/deploy.mjs
 };
 
