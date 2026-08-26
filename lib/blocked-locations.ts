@@ -37,7 +37,6 @@ export const BLOCKED_WAYFINDER_LOCATION_IDS = new Set<number>([
   429,  // Hostel Gate 2
 
   // Outdoor campus areas / external buildings
-  1323, // FET Building
   413,  // Sun-U Apartment
 
   // Canopy walks and link bridges to external buildings
