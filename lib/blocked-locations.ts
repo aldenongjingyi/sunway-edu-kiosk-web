@@ -14,7 +14,6 @@ export const BLOCKED_WAYFINDER_LOCATION_IDS = new Set<number>([
   1277, // ARTLab
   1676, // Assembly Point A
   1677, // Assembly Point B
-  1678, // Assembly Point C
   1281, // Menara Sunway
   419,  // Monash University
   415,  // Sun-U Residence
@@ -28,23 +27,7 @@ export const BLOCKED_WAYFINDER_LOCATION_IDS = new Set<number>([
   417,  // Sunway Medical Centre
   414,  // Waterfront Residence
 
-  // Gates
-  424,  // Main Gate
-  425,  // Side Gate 1
-  426,  // Side Gate 2
-  427,  // Side Gate 3
-  428,  // Hostel Gate 1
-  429,  // Hostel Gate 2
-
-  // Outdoor campus areas / external buildings
-  413,  // Sun-U Apartment
-
-  // Canopy walks and link bridges to external buildings
-  354,  // Canopy Walk to Monash Uni
-  1279, // Canopy Walk to Sunway Clio Exhibition Centre
+  // Canopy walks and link bridges to external buildings (outdoor pins on map)
   1443, // SUN-U Link Bridge
   1444, // SUN-U Residence Link Bridge
-
-  // Off-campus
-  139,  // Off-Campus Residence
 ]);
