@@ -14,7 +14,9 @@ All three filters applied at the data layer — all UI (search, categories, depa
 2. `kind === "FACILITY"` — excludes STAIR (221) and LIFT (107) kinds
 3. Has at least one node — excludes unmapped locations that cannot be navigated to
 
-Matches the iOS kiosk (`DataManager.swift` + `ContentViewController.swift`) and Flutter MyCampus app (`datas.dart` + `categories_list.dart`). Currently 822 of 1,204 locations pass. NodePickerMap is unaffected — it renders all nodes regardless of kind.
+Matches the iOS kiosk (`DataManager.swift` + `ContentViewController.swift`) and Flutter MyCampus app (`datas.dart` + `categories_list.dart`). NodePickerMap is unaffected — it renders all nodes regardless of kind.
+
+Note: iOS only applies filter #1 (lat/lng). The kiosk adds kind + node filters intentionally — STAIR/LIFT locations can't be navigated to. Blocked locations (`lib/blocked-locations.ts`) are stripped from the wayfinder map canvas AND from search — only block locations that should be invisible in both places.
 
 ### NodePickerMap (`components/NodePickerMap.tsx`)
 - Pure SVG floor plan — fetches `maps_v001.json.gz` via CF proxy. No wayfinder dependency.
@@ -30,9 +32,9 @@ Applied via `adoptedStyleSheets` after the `ready` event. Do not remove these wi
 - **Level selector**: `align-self: stretch; overflow-y: auto; max-height: none` — full-height scrolling.
 
 ### Blocking External Locations from the Map (`lib/blocked-locations.ts`)
-The Wayfinder engine renders every location in its `data-url` as a label/pin on the canvas — there is no API to filter by location ID. To hide outdoor/external locations (gates, off-campus buildings, etc.), `MapView.tsx` fetches the data via the CF proxy, strips blocked IDs from `data.locations`, creates a `Blob` URL with the filtered JSON, and passes that as `data-url`. The wayfinder accepts plain JSON (tries `response.json()` before gzip decompression). Falls back to the direct `DATA_URL` on fetch failure.
+The Wayfinder engine renders every location in its `data-url` as a label/pin on the canvas — there is no API to filter by location ID. To hide locations, `MapView.tsx` fetches the data via the CF proxy, strips blocked IDs from `data.locations`, creates a `Blob` URL with the filtered JSON, and passes that as `data-url`. The wayfinder accepts plain JSON (tries `response.json()` before gzip decompression). Falls back to the direct `DATA_URL` on fetch failure.
 
-All blocked IDs live in `lib/blocked-locations.ts` with comments. To add more: append to `BLOCKED_WAYFINDER_LOCATION_IDS` and redeploy.
+**IMPORTANT**: Blocked IDs are hidden from BOTH the map canvas AND search results. Only block locations that should be fully invisible (outdoor lat/lng≠0 locations, external buildings). Indoor locations with nodes should NOT be blocked — they should be searchable to match iOS behaviour. Currently blocked: outdoor/external locations (lat/lng≠0) and two link bridges (SUN-U Link Bridge, SUN-U Residence Link Bridge).
 
 ### Navigation
 Use `map.navigateTo({ from: fromLocation, to: destinationId })`. **DO NOT use `engine.navigateFromYouAreHere`** — causes white canvas on Elo. If the kiosk node has no location or its location isn't in the wayfinder graph, call `map.getLocations()` and find the nearest node on the same level whose location IS valid. Falls back to `focusLocation(destinationId)` if navigateTo fails.
