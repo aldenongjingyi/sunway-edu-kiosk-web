@@ -78,6 +78,7 @@ export default function KioskShell() {
       setSearchQuery(query);
       setSearchFilterCategory(filterCategory);
       setSearchFilterDepartment(filterDepartment);
+      if (query.length === 0) setShowResults(false);
     }, 300);
     return () => { if (searchDebounce300Ref.current) clearTimeout(searchDebounce300Ref.current); };
   }, [query, filterCategory, filterDepartment]);
@@ -272,7 +273,7 @@ export default function KioskShell() {
     setQuery(val);
     setFilterCategory(null);
     setFilterDepartment(null);
-    setShowResults(val.length > 0);
+    if (val.length > 0) setShowResults(true);
     resetIdle();
     // Debounce typed search tracking — fire 1s after user stops typing
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
