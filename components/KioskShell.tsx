@@ -142,7 +142,14 @@ export default function KioskShell() {
           pageRef.current.style.transition = "transform 0.3s ease-out";
           pageRef.current.style.transform = "translateY(0)";
         }
-        setTimeout(() => window.location.reload(), 300);
+        setTimeout(() => {
+          // On Android: use the native bridge so the stall watchdog and disk-cache
+          // fallback work correctly (offline pull-to-refresh shows cached version).
+          // On browser/Vercel: fall back to a regular page reload.
+          const bridge = (window as { _KioskCache?: { reload?: () => void } })._KioskCache;
+          if (bridge?.reload) bridge.reload();
+          else window.location.reload();
+        }, 300);
       } else {
         // Not committed — snap page back
         if (pageRef.current) {
