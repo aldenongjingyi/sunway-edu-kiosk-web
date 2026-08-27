@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
@@ -66,6 +66,10 @@ export default function KioskShell() {
   const [notProvisionedAlert, setNotProvisionedAlert] = useState(false);
   const [noNodeAlert, setNoNodeAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
+
+  const deferredQuery = useDeferredValue(query);
+  const deferredFilterCategory = useDeferredValue(filterCategory);
+  const deferredFilterDepartment = useDeferredValue(filterDepartment);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -503,9 +507,9 @@ export default function KioskShell() {
 
   const content = showResults ? (
     <SearchResults
-      query={query}
-      filterCategory={filterCategory}
-      filterDepartment={filterDepartment}
+      query={deferredQuery}
+      filterCategory={deferredFilterCategory}
+      filterDepartment={deferredFilterDepartment}
       onLocationSelect={handleLocationSelect}
       onStaffSelect={handleStaffSelect}
     />
