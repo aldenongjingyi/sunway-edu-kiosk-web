@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
@@ -70,6 +70,9 @@ export default function KioskShell() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilterCategory, setSearchFilterCategory] = useState<number | null>(null);
   const [searchFilterDepartment, setSearchFilterDepartment] = useState<string | null>(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredSearchFilterCategory = useDeferredValue(searchFilterCategory);
+  const deferredSearchFilterDepartment = useDeferredValue(searchFilterDepartment);
   const searchDebounce300Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -519,9 +522,9 @@ export default function KioskShell() {
 
   const content = showResults ? (
     <SearchResults
-      query={searchQuery}
-      filterCategory={searchFilterCategory}
-      filterDepartment={searchFilterDepartment}
+      query={deferredSearchQuery}
+      filterCategory={deferredSearchFilterCategory}
+      filterDepartment={deferredSearchFilterDepartment}
       onLocationSelect={handleLocationSelect}
       onStaffSelect={handleStaffSelect}
     />
