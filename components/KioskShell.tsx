@@ -16,7 +16,7 @@ import type { Category, Staff } from "@/lib/types";
 
 const IDLE_SECONDS = 30;
 const MAP_IDLE_SECONDS = 30; // longer timeout while map is open
-const RELOAD_INTERVAL_MS = 15 * 60 * 1000; // reload every 15 minutes while screensaver is active
+const RELOAD_INTERVAL_MS = 30 * 1000; // full page reload every 30s while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 
@@ -192,10 +192,15 @@ export default function KioskShell() {
     });
   }, [loadData, loadStaff]);
 
-  // Periodic data refresh — repeats every 15 minutes while screensaver is active
+  // Periodic full page reload while screensaver is active — picks up new builds automatically.
+  // Uses the native bridge on Android (so offline falls back to cache), else window.location.reload().
   useEffect(() => {
     if (!screensaverExpanded) return;
-    const id = setInterval(() => useDataStore.getState().refreshData(), RELOAD_INTERVAL_MS);
+    const id = setInterval(() => {
+      const bridge = (window as { _KioskCache?: { reload?: () => void } })._KioskCache;
+      if (bridge?.reload) bridge.reload();
+      else window.location.reload();
+    }, RELOAD_INTERVAL_MS);
     return () => clearInterval(id);
   }, [screensaverExpanded]);
 
@@ -575,7 +580,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #20</p>
+            <p>Version 1.0 Build #21</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
             <p>Since {formatTimestamp(lastStaffRefreshed)}</p>
@@ -634,7 +639,7 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #20</p>
+          <p>Version 1.0 Build #21</p>
         </div>
       )}
       </div>{/* end pageRef */}
