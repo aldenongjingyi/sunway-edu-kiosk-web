@@ -260,7 +260,7 @@ export default function KioskShell() {
 
   // Track any user interaction
   useEffect(() => {
-    const events = ["touchstart", "mousedown", "keydown", "mousemove"];
+    const events = ["touchstart", "mousedown", "keydown", "mousemove", "input"];
     events.forEach(e => window.addEventListener(e, resetIdle, { passive: true }));
     resetIdle();
     return () => events.forEach(e => window.removeEventListener(e, resetIdle));
