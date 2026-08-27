@@ -296,7 +296,9 @@ export default function KioskShell() {
     if (val === ADMIN_CODE) {
       setShowNodePicker(true);
       setQuery("");
+      setShowResults(false);
       inputRef.current?.blur();
+      resetIdle();
       return;
     }
     setQuery(val);
