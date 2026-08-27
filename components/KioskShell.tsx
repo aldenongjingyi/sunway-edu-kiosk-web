@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
@@ -67,9 +67,20 @@ export default function KioskShell() {
   const [noNodeAlert, setNoNodeAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
 
-  const deferredQuery = useDeferredValue(query);
-  const deferredFilterCategory = useDeferredValue(filterCategory);
-  const deferredFilterDepartment = useDeferredValue(filterDepartment);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFilterCategory, setSearchFilterCategory] = useState<number | null>(null);
+  const [searchFilterDepartment, setSearchFilterDepartment] = useState<string | null>(null);
+  const searchDebounce300Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchDebounce300Ref.current) clearTimeout(searchDebounce300Ref.current);
+    searchDebounce300Ref.current = setTimeout(() => {
+      setSearchQuery(query);
+      setSearchFilterCategory(filterCategory);
+      setSearchFilterDepartment(filterDepartment);
+    }, 300);
+    return () => { if (searchDebounce300Ref.current) clearTimeout(searchDebounce300Ref.current); };
+  }, [query, filterCategory, filterDepartment]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -507,9 +518,9 @@ export default function KioskShell() {
 
   const content = showResults ? (
     <SearchResults
-      query={deferredQuery}
-      filterCategory={deferredFilterCategory}
-      filterDepartment={deferredFilterDepartment}
+      query={searchQuery}
+      filterCategory={searchFilterCategory}
+      filterDepartment={searchFilterDepartment}
       onLocationSelect={handleLocationSelect}
       onStaffSelect={handleStaffSelect}
     />
@@ -565,7 +576,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #17</p>
+            <p>Version 1.0 Build #18</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
             <p>Since {formatTimestamp(lastStaffRefreshed)}</p>
@@ -624,7 +635,7 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #17</p>
+          <p>Version 1.0 Build #18</p>
         </div>
       )}
       </div>{/* end pageRef */}
