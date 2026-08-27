@@ -16,7 +16,7 @@ import type { Category, Staff } from "@/lib/types";
 
 const IDLE_SECONDS = 30;
 const MAP_IDLE_SECONDS = 30; // longer timeout while map is open
-const RELOAD_INTERVAL_MS = 30 * 1000; // full page reload every 30s while screensaver is active
+const RELOAD_INTERVAL_MS = 30 * 60 * 1000; // check for new build every 30 min while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
 
@@ -43,6 +43,15 @@ function formatTimestamp(date: Date | null): string {
   return `${days[date.getDay()]} ${y}-${mo}-${d} ${h}:${mi} ${ap}`;
 }
 
+function formatKLTime(date: Date): string {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const kl = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  const h = String(kl.getUTCHours()).padStart(2, "0");
+  const m = String(kl.getUTCMinutes()).padStart(2, "0");
+  return `${days[kl.getUTCDay()]} ${kl.getUTCDate()} ${months[kl.getUTCMonth()]} ${h}:${m}`;
+}
+
 interface FloorOption {
   levelId: number;
   title: string;
@@ -66,7 +75,7 @@ export default function KioskShell() {
   const [notProvisionedAlert, setNotProvisionedAlert] = useState(false);
   const [noNodeAlert, setNoNodeAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
-  const [reloadCountdown, setReloadCountdown] = useState(RELOAD_INTERVAL_MS / 1000);
+  const [pageLoadTime] = useState(() => new Date());
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilterCategory, setSearchFilterCategory] = useState<number | null>(null);
@@ -202,16 +211,10 @@ export default function KioskShell() {
       .catch(() => {});
   }, []);
 
-  // While screensaver is active, check every 30s for a new build.
+  // While screensaver is active, check every 30 min for a new build.
   // Reloads only if index.html changed (new JS bundle hashes) — skips if offline or same build.
   useEffect(() => {
-    const intervalSecs = RELOAD_INTERVAL_MS / 1000;
-    if (!screensaverExpanded) {
-      setReloadCountdown(intervalSecs);
-      return;
-    }
-    setReloadCountdown(intervalSecs);
-    const countdown = setInterval(() => setReloadCountdown(s => s - 1), 1000);
+    if (!screensaverExpanded) return;
     const check = setInterval(() => {
       if (!initialHtmlRef.current) return;
       fetch(window.location.href, { cache: "no-store" })
@@ -224,7 +227,7 @@ export default function KioskShell() {
         })
         .catch(() => {}); // offline — skip
     }, RELOAD_INTERVAL_MS);
-    return () => { clearInterval(countdown); clearInterval(check); };
+    return () => clearInterval(check);
   }, [screensaverExpanded]);
 
   // Keep mapOpenRef in sync so resetIdle can read current map state without deps
@@ -603,7 +606,8 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #24 · {reloadCountdown}s</p>
+            <p>Version 1.0 Build #24</p>
+            <p>Refreshed {formatKLTime(pageLoadTime)}</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
             <p>Since {formatTimestamp(lastStaffRefreshed)}</p>
@@ -662,7 +666,8 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #24 · {reloadCountdown}s</p>
+          <p>Version 1.0 Build #24</p>
+          <p>Refreshed {formatKLTime(pageLoadTime)}</p>
         </div>
       )}
       </div>{/* end pageRef */}
