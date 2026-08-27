@@ -138,23 +138,11 @@ export default function KioskShell() {
           if (icon) icon.style.animation = "spin 0.75s linear infinite";
         }
         hdx.addAction("ui.refresh.pull");
-        useDataStore.getState().refreshData().then(() => {
-          if (pageRef.current) {
-            pageRef.current.style.transition = "transform 0.3s ease-out";
-            pageRef.current.style.transform = "translateY(0)";
-          }
-          if (pullSpinnerRef.current) {
-            pullSpinnerRef.current.style.transition = "opacity 0.3s";
-            pullSpinnerRef.current.style.opacity = "0";
-            const icon = pullSpinnerRef.current.firstElementChild as HTMLElement | null;
-            if (icon) icon.style.animation = "none";
-          }
-          setTimeout(() => {
-            if (pageRef.current) pageRef.current.style.transition = "none";
-            if (pullSpinnerRef.current) pullSpinnerRef.current.style.transition = "none";
-          }, 350);
-          isRefreshingRef.current = false;
-        });
+        if (pageRef.current) {
+          pageRef.current.style.transition = "transform 0.3s ease-out";
+          pageRef.current.style.transform = "translateY(0)";
+        }
+        setTimeout(() => window.location.reload(), 300);
       } else {
         // Not committed — snap page back
         if (pageRef.current) {
