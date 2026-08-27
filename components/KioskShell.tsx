@@ -66,6 +66,7 @@ export default function KioskShell() {
   const [notProvisionedAlert, setNotProvisionedAlert] = useState(false);
   const [noNodeAlert, setNoNodeAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
+  const [reloadCountdown, setReloadCountdown] = useState(RELOAD_INTERVAL_MS / 1000);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilterCategory, setSearchFilterCategory] = useState<number | null>(null);
@@ -195,13 +196,19 @@ export default function KioskShell() {
   // Periodic full page reload while screensaver is active — picks up new builds automatically.
   // Uses the native bridge on Android (so offline falls back to cache), else window.location.reload().
   useEffect(() => {
-    if (!screensaverExpanded) return;
-    const id = setInterval(() => {
+    const intervalSecs = RELOAD_INTERVAL_MS / 1000;
+    if (!screensaverExpanded) {
+      setReloadCountdown(intervalSecs);
+      return;
+    }
+    setReloadCountdown(intervalSecs);
+    const countdown = setInterval(() => setReloadCountdown(s => s - 1), 1000);
+    const reload = setInterval(() => {
       const bridge = (window as { _KioskCache?: { reload?: () => void } })._KioskCache;
       if (bridge?.reload) bridge.reload();
       else window.location.reload();
     }, RELOAD_INTERVAL_MS);
-    return () => clearInterval(id);
+    return () => { clearInterval(countdown); clearInterval(reload); };
   }, [screensaverExpanded]);
 
   // Keep mapOpenRef in sync so resetIdle can read current map state without deps
@@ -580,7 +587,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #21</p>
+            <p>Version 1.0 Build #21 · {reloadCountdown}s</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
             <p>Since {formatTimestamp(lastStaffRefreshed)}</p>
@@ -639,7 +646,7 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #21</p>
+          <p>Version 1.0 Build #21 · {reloadCountdown}s</p>
         </div>
       )}
       </div>{/* end pageRef */}
