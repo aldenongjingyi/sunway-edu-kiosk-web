@@ -91,6 +91,7 @@ export default function KioskShell() {
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapOpenRef = useRef(false);
+  const initialHtmlRef = useRef<string | null>(null);
 
   // ── Pull to refresh ────────────────────────────────────────────────────────
   const PULL_THRESHOLD = 100;
@@ -193,8 +194,16 @@ export default function KioskShell() {
     });
   }, [loadData, loadStaff]);
 
-  // Periodic full page reload while screensaver is active — picks up new builds automatically.
-  // Uses the native bridge on Android (so offline falls back to cache), else window.location.reload().
+  // Fetch and store the initial index.html so we can detect when a new build is deployed.
+  useEffect(() => {
+    fetch(window.location.href, { cache: "no-store" })
+      .then(r => r.text())
+      .then(html => { initialHtmlRef.current = html; })
+      .catch(() => {});
+  }, []);
+
+  // While screensaver is active, check every 30s for a new build.
+  // Reloads only if index.html changed (new JS bundle hashes) — skips if offline or same build.
   useEffect(() => {
     const intervalSecs = RELOAD_INTERVAL_MS / 1000;
     if (!screensaverExpanded) {
@@ -203,12 +212,19 @@ export default function KioskShell() {
     }
     setReloadCountdown(intervalSecs);
     const countdown = setInterval(() => setReloadCountdown(s => s - 1), 1000);
-    const reload = setInterval(() => {
-      const bridge = (window as { _KioskCache?: { reload?: () => void } })._KioskCache;
-      if (bridge?.reload) bridge.reload();
-      else window.location.reload();
+    const check = setInterval(() => {
+      if (!initialHtmlRef.current) return;
+      fetch(window.location.href, { cache: "no-store" })
+        .then(r => r.text())
+        .then(html => {
+          if (html === initialHtmlRef.current) return;
+          const bridge = (window as { _KioskCache?: { reload?: () => void } })._KioskCache;
+          if (bridge?.reload) bridge.reload();
+          else window.location.reload();
+        })
+        .catch(() => {}); // offline — skip
     }, RELOAD_INTERVAL_MS);
-    return () => { clearInterval(countdown); clearInterval(reload); };
+    return () => { clearInterval(countdown); clearInterval(check); };
   }, [screensaverExpanded]);
 
   // Keep mapOpenRef in sync so resetIdle can read current map state without deps
