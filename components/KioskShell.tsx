@@ -14,8 +14,8 @@ import NodePickerMap from "./NodePickerMap";
 import MapView from "./MapView";
 import type { Category, Staff } from "@/lib/types";
 
-const IDLE_SECONDS = 30;
-const MAP_IDLE_SECONDS = 30; // longer timeout while map is open
+const IDLE_SECONDS = 120;
+const MAP_IDLE_SECONDS = 120; // longer timeout while map is open
 const RELOAD_INTERVAL_MS = 30 * 60 * 1000; // check for new build every 30 min while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
@@ -608,7 +608,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #25</p>
+            <p>Version 1.0 Build #26</p>
             <p>Refreshed {formatKLTime(pageLoadTime)}</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
@@ -668,7 +668,7 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #25</p>
+          <p>Version 1.0 Build #26</p>
           <p>Refreshed {formatKLTime(pageLoadTime)}</p>
         </div>
       )}
