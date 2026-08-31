@@ -4,14 +4,15 @@
  * Run with: node --env-file=.env.local scripts/deploy.mjs
  *
  * Steps:
- *  1. Fetch wayfinder-map.min.js from upstream and save to public/
- *  2. next build  (output: export → writes to out/)
- *  3. Sync out/ to DO Spaces, with correct content-type + cache headers
- *  4. Cleanup wayfinder JS from public/
+ *  1. next build  (output: export → writes to out/)
+ *  2. Sync out/ to DO Spaces, with correct content-type + cache headers
+ *
+ * Note: wayfinder engine is loaded at runtime from maps-sunwayedu.getmallapp.com —
+ * no bundling needed. Deploy the engine repo separately; kiosk picks it up automatically.
  */
 
 import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
-import { readFileSync, writeFileSync, unlinkSync, readdirSync, statSync } from "fs";
+import { readFileSync, readdirSync, statSync } from "fs";
 import { join, relative, extname } from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
@@ -33,8 +34,6 @@ for (const [k, v] of Object.entries({ DO_SPACES_KEY, DO_SPACES_SECRET, DO_SPACES
   if (!v) { console.error(`Missing env var: ${k}`); process.exit(1); }
 }
 
-const WAYFINDER_URL = "https://maps-sunwayedu.getmallapp.com/wayfinder-map.min.js";
-const WAYFINDER_LOCAL = join(ROOT, "public", "wayfinder-map.min.js");
 const OUT_DIR = join(ROOT, "out");
 const SPACE_PREFIX = DO_SPACES_PATH ? DO_SPACES_PATH.replace(/\/?$/, "/") : "";
 
@@ -82,21 +81,11 @@ function walk(dir, files = []) {
 
 // ── Main ───────────────────────────────────────────────────────────────────
 (async () => {
-  // 1. Fetch wayfinder JS
-  console.log("⬇  Fetching wayfinder-map.min.js…");
-  const res = await fetch(WAYFINDER_URL, {
-    headers: { "User-Agent": "deploy-script/1.0" },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch wayfinder JS: ${res.status}`);
-  const js = await res.text();
-  writeFileSync(WAYFINDER_LOCAL, js, "utf-8");
-  console.log(`   Saved ${(js.length / 1024).toFixed(1)} KB`);
-
-  // 2. Build
-  console.log("\n🔨 Building…");
+  // 1. Build
+  console.log("🔨 Building…");
   execSync("npm run build", { cwd: ROOT, stdio: "inherit" });
 
-  // 3. Sync to DO Spaces
+  // 2. Sync to DO Spaces
   console.log("\n☁  Syncing to DO Spaces…");
   const client = new S3Client({
     endpoint: `https://${DO_SPACES_REGION}.digitaloceanspaces.com`,
@@ -127,8 +116,6 @@ function walk(dir, files = []) {
 
   console.log(`\n   ✓ ${uploaded} files uploaded`);
 
-  // 4. Cleanup
-  unlinkSync(WAYFINDER_LOCAL);
   console.log("\n✅ Deploy complete.");
   console.log(`   https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.cdn.digitaloceanspaces.com`);
 })().catch(err => {
