@@ -446,7 +446,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       <wayfinder-map
         ref={mapRef}
         className="absolute inset-0 block"
-        data-url={mapDataUrl || undefined}
+data-url={mapDataUrl || undefined}
         map-url={mapDataUrl ? MAP_URL : undefined}
         route-mode="lift"
         level-selector=""

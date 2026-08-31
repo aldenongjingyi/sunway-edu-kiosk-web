@@ -170,14 +170,11 @@ export default function NodePickerMap({ onClose }: Props) {
       const panDy      = midY - lastTouchRef.current.y;
 
       setView(v => {
-        // Where is the pinch midpoint in SVG space?
         const svgMidX = v.x + ((midX - rect.left) / rect.width)  * v.w;
         const svgMidY = v.y + ((midY - rect.top)  / rect.height) * v.h;
-        // Clamp: max 20× zoom in; zoom-out limited to full original extent
         const ratio = v.h / v.w;
         const newW  = Math.min(Math.max(v.w / scaleDelta, initialViewRef.current.w / 20), initialViewRef.current.w);
         const newH  = newW * ratio;
-        // Simultaneously apply any translation from the midpoint moving
         const panSvgDx = -(panDx / rect.width)  * newW;
         const panSvgDy = -(panDy / rect.height) * newH;
         return {

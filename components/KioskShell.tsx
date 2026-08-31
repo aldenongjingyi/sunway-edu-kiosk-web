@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, startTransition, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
@@ -88,9 +88,11 @@ export default function KioskShell() {
   useEffect(() => {
     if (searchDebounce300Ref.current) clearTimeout(searchDebounce300Ref.current);
     searchDebounce300Ref.current = setTimeout(() => {
-      setSearchQuery(query);
-      setSearchFilterCategory(filterCategory);
-      setSearchFilterDepartment(filterDepartment);
+      startTransition(() => {
+        setSearchQuery(query);
+        setSearchFilterCategory(filterCategory);
+        setSearchFilterDepartment(filterDepartment);
+      });
       if (query.length === 0) setShowResults(false);
     }, 300);
     return () => { if (searchDebounce300Ref.current) clearTimeout(searchDebounce300Ref.current); };
@@ -304,7 +306,7 @@ export default function KioskShell() {
     setQuery(val);
     setFilterCategory(null);
     setFilterDepartment(null);
-    if (val.length > 0) setShowResults(true);
+    if (val.length > 0) startTransition(() => setShowResults(true));
     resetIdle();
     // Debounce typed search tracking — fire 1s after user stops typing
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -608,7 +610,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #26</p>
+            <p>Version 1.0 Build #27</p>
             <p>Refreshed {formatKLTime(pageLoadTime)}</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
@@ -668,7 +670,7 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #26</p>
+          <p>Version 1.0 Build #27</p>
           <p>Refreshed {formatKLTime(pageLoadTime)}</p>
         </div>
       )}
