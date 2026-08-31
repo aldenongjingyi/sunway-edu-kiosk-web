@@ -263,14 +263,14 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
                 const cx = targetFloorCodeRef.current ? epx : spx;
                 const cy = targetFloorCodeRef.current ? epy : spy;
                 el.setFloor(floorCode);
-                el.centerOn(cx, cy, { animate: true, scale: 3 });
-                // Re-apply rotation: fitToBounds (called on first setFloor) zeroes rotation,
-                // so we restore it here after the floor/center are set.
+                // Apply rotation BEFORE centerOn — centerOn({animate:true}) captures
+                // from.rotation at call time and the animation preserves it each frame.
+                // Calling setRotation after centerOn would be overridden by the animation.
                 const savedRot = parseFloat(localStorage.getItem(ROTATION_KEY) ?? "0");
-                if (isFinite(savedRot) && Math.abs(savedRot) > 0.001) {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (map as any).setRotation(savedRot);
-                }
+                const hasRot = isFinite(savedRot) && Math.abs(savedRot) > 0.001;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if (hasRot) (map as any).setRotation(savedRot);
+                el.centerOn(cx, cy, { animate: true, scale: 3 });
               } catch (_) {}
             }, 0);
           }
@@ -372,6 +372,13 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           }
 
           if (fromLocation) {
+            // Apply saved rotation immediately before navigateTo so the engine's
+            // internal centerOn animation captures it as from.rotation and preserves it.
+            try {
+              const rot = parseFloat(localStorage.getItem(ROTATION_KEY) ?? "0");
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if (isFinite(rot) && Math.abs(rot) > 0.001) (map as any).setRotation(rot);
+            } catch (_) {}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const navOpts: Record<string, unknown> = { from: fromLocation, to: destinationId };
             // Only include connectorConstraint when a mode is active — passing null explicitly
