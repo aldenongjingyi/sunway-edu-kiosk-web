@@ -8,7 +8,8 @@ interface Props {
   targetFloorCode?: string | null;
   onClose: () => void;
 }
-const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
+const KIOSK_NODE_KEY  = "admin.kiosk.nodeId";
+const ROTATION_KEY    = "admin.nodePickerMap.rotation";
 const SCRIPT_URL = process.env.NEXT_PUBLIC_WAYFINDER_URL ||
   "/wayfinder-map.min.js";
 const DATA_URL  = "https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz";
@@ -263,6 +264,13 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
                 const cy = targetFloorCodeRef.current ? epy : spy;
                 el.setFloor(floorCode);
                 el.centerOn(cx, cy, { animate: true, scale: 3 });
+                // Re-apply rotation: fitToBounds (called on first setFloor) zeroes rotation,
+                // so we restore it here after the floor/center are set.
+                const savedRot = parseFloat(localStorage.getItem(ROTATION_KEY) ?? "0");
+                if (isFinite(savedRot) && Math.abs(savedRot) > 0.001) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (map as any).setRotation(savedRot);
+                }
               } catch (_) {}
             }, 0);
           }
@@ -277,6 +285,18 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
           btn?.scrollIntoView({ block: "nearest", behavior: "smooth" });
         } catch (_) {}
       });
+    };
+    const applyRotation = () => {
+      // Read the rotation angle the admin set in NodePickerMap and apply it to the
+      // wayfinder canvas. Only the canvas rotates — shadow DOM controls are unaffected.
+      // setRotation() is a custom method added to WayfinderMap.js in the engine.
+      try {
+        const saved = parseFloat(localStorage.getItem(ROTATION_KEY) ?? "0");
+        if (isFinite(saved) && Math.abs(saved) > 0.001) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (map as any).setRotation(saved);
+        }
+      } catch (_) {}
     };
     const applyYouAreHere = () => {
       // Re-apply after ready in case the element was connected before React set the prop.
@@ -296,7 +316,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
         );
       if (candidates.length > 0) map.setAttribute("you-are-here-node-id", String(candidates[0].location!));
     };
-    const setup = () => { applyYouAreHere(); attachTooltips(); interceptConnectors(); routeFloorIndicators(); autoScrollLevel(); };
+    const setup = () => { applyYouAreHere(); applyRotation(); attachTooltips(); interceptConnectors(); routeFloorIndicators(); autoScrollLevel(); };
     if ((map as HTMLElement & { isInitialized?: boolean }).isInitialized) {
       setup();
     } else {
