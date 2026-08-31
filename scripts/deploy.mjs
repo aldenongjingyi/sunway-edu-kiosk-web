@@ -82,15 +82,14 @@ function walk(dir, files = []) {
 
 // ── Main ───────────────────────────────────────────────────────────────────
 (async () => {
-  // 1. Fetch wayfinder JS
-  console.log("⬇  Fetching wayfinder-map.min.js…");
-  const res = await fetch(WAYFINDER_URL, {
-    headers: { "User-Agent": "deploy-script/1.0" },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch wayfinder JS: ${res.status}`);
-  const js = await res.text();
-  writeFileSync(WAYFINDER_LOCAL, js, "utf-8");
-  console.log(`   Saved ${(js.length / 1024).toFixed(1)} KB`);
+  // 1. Wayfinder JS — use bundled public/wayfinder-map.min.js (contains setRotation).
+  // CDN deploy pending: once engine is pushed to maps-sunwayedu.getmallapp.com, restore the fetch below.
+  console.log("⬇  Using bundled wayfinder-map.min.js (CDN deploy pending)…");
+  // const res = await fetch(WAYFINDER_URL, { headers: { "User-Agent": "deploy-script/1.0" } });
+  // if (!res.ok) throw new Error(`Failed to fetch wayfinder JS: ${res.status}`);
+  // const js = await res.text();
+  // writeFileSync(WAYFINDER_LOCAL, js, "utf-8");
+  // console.log(`   Saved ${(js.length / 1024).toFixed(1)} KB`);
 
   // 2. Build
   console.log("\n🔨 Building…");
@@ -127,8 +126,8 @@ function walk(dir, files = []) {
 
   console.log(`\n   ✓ ${uploaded} files uploaded`);
 
-  // 4. Cleanup
-  unlinkSync(WAYFINDER_LOCAL);
+  // 4. Cleanup (skip — bundled engine is not a temp file)
+  // unlinkSync(WAYFINDER_LOCAL);
   console.log("\n✅ Deploy complete.");
   console.log(`   https://${DO_SPACES_BUCKET}.${DO_SPACES_REGION}.cdn.digitaloceanspaces.com`);
 })().catch(err => {
