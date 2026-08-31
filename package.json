@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "prebuild": "echo \"Engine loaded from CDN at runtime in production; bundled public/wayfinder-map.min.js used for Vercel\""
+    "prebuild": "curl -sL 'https://maps-sunwayedu.getmallapp.com/wayfinder-map.min.js' -o public/wayfinder-map.min.js"
   },
   "dependencies": {
     "@hyperdx/browser": "^0.25.1",
