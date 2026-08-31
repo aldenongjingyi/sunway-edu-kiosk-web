@@ -288,11 +288,15 @@ export default function NodePickerMap({ onClose }: Props) {
           </div>
         ) : (
           <svg
-            viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-            className="absolute inset-0 w-full h-full"
-            style={{ display: "block", transform: `rotate(${rotation}rad)`, transformOrigin: "center" }}
+            viewBox={`${view.x - view.w / 2} ${view.y - view.h / 2} ${view.w * 2} ${view.h * 2}`}
+            style={{
+              position: "absolute", display: "block",
+              left: "-50%", top: "-50%", width: "200%", height: "200%",
+              transform: `rotate(${rotation}rad)`, transformOrigin: "center",
+            }}
           >
-            <rect x={0} y={0} width={vw} height={vh} fill="#e8e4dc" />
+            {/* Background covers the full expanded viewBox so no gaps appear outside the floor plan */}
+            <rect x={view.x - view.w / 2} y={view.y - view.h / 2} width={view.w * 2} height={view.h * 2} fill="#e8e4dc" />
 
             {/* Floor plan vector layers */}
             {activeMap.layers.map((layer, li) => (
