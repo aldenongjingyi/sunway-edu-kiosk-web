@@ -49,9 +49,10 @@ function processKioskData(data: KioskData) {
         if (n.location === l.id && levelsMap[n.level]) levelSet.add(levelsMap[n.level]);
       });
       const sortedNodeLevels = Array.from(levelSet).sort((a, b) => b.position - a.position);
+      const venueWing = l.venue?.split(".")[1] ?? "";
       const levelTitles = sortedNodeLevels.length === 1
-        ? [sortedNodeLevels[0].title]
-        : sortedNodeLevels.map(lv => lv.label);
+        ? [floorLabelFromVenue(sortedNodeLevels[0].code, venueWing) || sortedNodeLevels[0].title]
+        : sortedNodeLevels.map(lv => floorLabelFromVenue(lv.code, venueWing) || lv.label);
       return { ...l, categories_, levelTitles };
     });
 

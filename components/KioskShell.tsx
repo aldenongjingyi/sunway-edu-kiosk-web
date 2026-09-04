@@ -118,6 +118,12 @@ export default function KioskShell() {
   useEffect(() => {
     const onStart = (e: TouchEvent) => {
       if (isRefreshingRef.current || !pullEnabledRef.current) return;
+      // Don't intercept if touch is inside a scrolled element — let it scroll back up.
+      let el = e.target as HTMLElement | null;
+      while (el) {
+        if (el.scrollTop > 0) return;
+        el = el.parentElement;
+      }
       pullStartY.current = e.touches[0].clientY;
     };
 
@@ -610,7 +616,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #28</p>
+            <p>Version 1.0 Build #29</p>
             <p>Refreshed {formatKLTime(pageLoadTime)}</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
@@ -670,7 +676,7 @@ export default function KioskShell() {
       {/* Footer version info */}
       {!showResults && tab === 0 && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #28</p>
+          <p>Version 1.0 Build #29</p>
           <p>Refreshed {formatKLTime(pageLoadTime)}</p>
         </div>
       )}
