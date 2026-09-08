@@ -24,6 +24,7 @@ export interface Location {
   title: string;
   label: string;
   venue: string;
+  building?: string;
   text: string;
   email: string;
   phone: string;
@@ -44,6 +45,8 @@ export interface Node {
   x: number;
   y: number;
   rotation: number;
+  building?: string;
+  level_label?: string;
   // resolved
   level_?: Level;
   location_?: Location;

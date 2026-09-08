@@ -37,6 +37,19 @@ function processKioskData(data: KioskData) {
   // When a node is added in the CMS, the location automatically becomes visible.
   const mappedLocationIds = new Set(data.nodes.map(n => n.location).filter(id => id !== null));
 
+  // Build a map of locationId -> levelId -> level_label so we can use the
+  // wayfinder's own per-building physical floor labels (e.g. College L2 → "4",
+  // NUB L2 → "2", SQ L2 → "4") instead of a hardcoded CMS-code mapping.
+  const locLevelLabel: Record<number, Record<number, string>> = {};
+  data.nodes.forEach(n => {
+    if (n.location && n.level_label) {
+      if (!locLevelLabel[n.location]) locLevelLabel[n.location] = {};
+      if (!locLevelLabel[n.location][n.level]) {
+        locLevelLabel[n.location][n.level] = n.level_label;
+      }
+    }
+  });
+
   const locations = data.locations
     .filter(l => l.latitude === 0 && l.longitude === 0)
     .filter(l => l.kind === "FACILITY")
@@ -49,10 +62,13 @@ function processKioskData(data: KioskData) {
         if (n.location === l.id && levelsMap[n.level]) levelSet.add(levelsMap[n.level]);
       });
       const sortedNodeLevels = Array.from(levelSet).sort((a, b) => b.position - a.position);
-      const venueWing = l.venue?.split(".")[1] ?? "";
-      const levelTitles = sortedNodeLevels.length === 1
-        ? [floorLabelFromVenue(sortedNodeLevels[0].code, venueWing) || sortedNodeLevels[0].title]
-        : sortedNodeLevels.map(lv => floorLabelFromVenue(lv.code, venueWing) || lv.label);
+      // Wing from venue (e.g. "NORTH"), falling back to building field for empty-venue locations.
+      const venueWing = l.venue?.split(".")[1] || l.building || "";
+      const levelTitles = sortedNodeLevels.map((lv) =>
+        labelFromLevelLabel(locLevelLabel[l.id]?.[lv.id])
+          || floorLabelFromVenue(lv.code, venueWing)
+          || (sortedNodeLevels.length === 1 ? lv.title : lv.label)
+      );
       return { ...l, categories_, levelTitles };
     });
 
@@ -78,9 +94,25 @@ function buildingFromWing(wing: string): string {
     case "SB": return "College Building";
     case "NUB": return "University Building";
     case "SQ": return "Sunway Square";
-    case "GRADUATE": return "Graduate School";
+    case "GRADUATE":
+    case "GC": return "Graduate School";
+    case "SET": return "SET Building";
     default: return "";
   }
+}
+
+// Convert wayfinder node level_label to a human-readable floor string.
+// level_label is the authoritative per-building physical floor label (e.g. "4" for
+// College Level 4, "2" for NUB Level 2, "B1" for NUB Basement 1).
+function labelFromLevelLabel(ll: string | undefined): string {
+  if (!ll) return "";
+  if (ll === "G") return "Ground Floor";
+  if (ll === "LG") return "Lower Ground";
+  if (ll === "B1") return "Basement 1";
+  if (ll === "B2") return "Basement 2";
+  if (ll === "M") return "Mezzanine";
+  if (/^\d+$/.test(ll)) return `Level ${ll}`;
+  return ll;
 }
 
 function floorLabelFromVenue(floor: string, wing: string): string {
