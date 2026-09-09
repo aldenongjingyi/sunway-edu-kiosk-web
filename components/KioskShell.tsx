@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useDeferredValue, useEffect, useRef, startTransition, useState } from "react";
 import { createPortal } from "react-dom";
+import QRCode from "react-qr-code";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
 import { BLOCKED_WAYFINDER_LOCATION_IDS } from "@/lib/blocked-locations";
@@ -50,7 +51,7 @@ function isOffHoursKL(): boolean {
   const klH = (now.getUTCHours() + 8) % 24;
   const totalMin = klH * 60 + now.getUTCMinutes();
   const START = 6 * 60 + 30;  // 6:30am
-  const END   = 20 * 60 + 0;  // 8:00pm
+  const END   = 17 * 60 + 30; // 5:30pm — TEST (production: 20 * 60)
   return totalMin < START || totalMin >= END;
 }
 
@@ -70,8 +71,108 @@ interface FloorOption {
   code: string;
 }
 
+const BANNER_QR_URL = "https://sunway-edu-kiosk-web.vercel.app";
+
+function FooterBanner() {
+  const [qrExpanded, setQrExpanded] = useState(false);
+
+  return (
+    <>
+      {/* Enlarged QR dialog — auto-closes after 15s (matches Pyramid behaviour) */}
+      {qrExpanded && portalMountedGlobal && createPortal(
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 400,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={() => setQrExpanded(false)}
+        >
+          <div
+            style={{
+              background: "#fff", borderRadius: 20, padding: 28,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p style={{ fontSize: 15, fontWeight: 700, color: "#00226B", textAlign: "center" }}>
+              Navigate on your phone
+            </p>
+            <QRCode value={BANNER_QR_URL} size={280} />
+            <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", maxWidth: 260 }}>
+              Scan this QR code to get live indoor navigation on your phone.
+            </p>
+            <button
+              onClick={() => setQrExpanded(false)}
+              style={{
+                padding: "8px 32px", borderRadius: 20,
+                background: "#00226B", color: "#fff",
+                fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <div style={{
+        flexShrink: 0,
+        background: "linear-gradient(to bottom, #00226B, #1a5fc8)",
+        display: "flex", alignItems: "center",
+        padding: "14px 20px", gap: 16,
+        fontFamily: "var(--font-body)",
+      }}>
+        {/* Text */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 5 }}>
+            Navigate using your phone!
+          </p>
+          <p style={{ fontSize: 12, fontWeight: 300, color: "rgba(255,255,255,0.85)", lineHeight: 1.4 }}>
+            Scan and download our MyCampus Mobile App now!
+          </p>
+        </div>
+
+        {/* App icon */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/mycampus-icon.png"
+          alt="MyCampus"
+          style={{ width: 62, height: 62, flexShrink: 0 }}
+        />
+
+        {/* QR code — tap to enlarge (Pyramid behaviour) */}
+        <div
+          style={{ background: "#fff", padding: 4, flexShrink: 0, cursor: "pointer", lineHeight: 0 }}
+          onClick={() => setQrExpanded(true)}
+        >
+          <QRCode value={BANNER_QR_URL} size={62} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Tracks whether the portal root (document.body) is mounted — set once on first KioskShell mount.
+let portalMountedGlobal = false;
+
 export default function KioskShell() {
   const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, loaded } = useDataStore();
+
+  // Parse ?from=<nodeId>&to=<locationId> URL params (set synchronously so all initial
+  // state below can depend on them).
+  const [urlParams] = useState<{ from: string; to: number } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const p = new URLSearchParams(window.location.search);
+    const from = p.get("from");
+    const to = p.get("to");
+    if (from && to) {
+      const toId = parseInt(to, 10);
+      if (!isNaN(toId) && toId > 0) return { from, to: toId };
+    }
+    return null;
+  });
 
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
@@ -81,9 +182,9 @@ export default function KioskShell() {
   const [isOffHours, setIsOffHours] = useState(() => isOffHoursKL());
   const [showResults, setShowResults] = useState(false);
   const [showNodePicker, setShowNodePicker] = useState(false);
-  const [mapDestinationId, setMapDestinationId] = useState<number | null>(null);
+  const [mapDestinationId, setMapDestinationId] = useState<number | null>(() => urlParams?.to ?? null);
   const [mapTargetFloorCode, setMapTargetFloorCode] = useState<string | null>(null);
-  const [mapMounted, setMapMounted] = useState(false);
+  const [mapMounted, setMapMounted] = useState(() => urlParams !== null);
   const [notProvisionedAlert, setNotProvisionedAlert] = useState(false);
   const [noNodeAlert, setNoNodeAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
@@ -204,7 +305,7 @@ export default function KioskShell() {
     };
   }, []);
 
-  useEffect(() => { setPortalMounted(true); }, []);
+  useEffect(() => { setPortalMounted(true); portalMountedGlobal = true; }, []);
   // ──────────────────────────────────────────────────────────────────────────
 
   const isV1 = DESIGN === "v1";
@@ -219,8 +320,12 @@ export default function KioskShell() {
     hdx.addAction("ui.shell.mounted");
     loadData().then(() => {
       loadStaff();
-      setScreensaverExpanded(true);
+      // Skip screensaver when launched via QR URL param — user wants the map immediately.
+      // During off-hours, also skip immediate expansion — let the idle timer trigger the
+      // black screen after 30s of no interaction instead of showing it on every load/refresh.
+      if (!urlParams && !isOffHoursKL()) setScreensaverExpanded(true);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadData, loadStaff]);
 
   // Fetch and store the initial index.html so we can detect when a new build is deployed.
@@ -486,7 +591,7 @@ export default function KioskShell() {
       {showNodePicker && <NodePickerMap onClose={() => { setShowNodePicker(false); handleClear(); }} />}
 
       {/* Map overlay — kept mounted once shown so it doesn't re-fetch on every open */}
-      {mapMounted && <MapView destinationId={mapDestinationId} targetFloorCode={mapTargetFloorCode} onClose={handleMapClose} />}
+      {mapMounted && <MapView destinationId={mapDestinationId} targetFloorCode={mapTargetFloorCode} sessionKioskNodeId={urlParams?.from ?? null} onClose={handleMapClose} />}
 
       {/* "Not provisioned" alert */}
       {notProvisionedAlert && (
@@ -543,8 +648,16 @@ export default function KioskShell() {
       {isOffHours && screensaverExpanded && portalMounted && createPortal(
         <div
           style={{ position: "fixed", inset: 0, background: "#000", zIndex: 300 }}
-          onTouchStart={handleScreensaverTap}
-          onMouseDown={handleScreensaverTap}
+          onTouchStart={e => e.stopPropagation()}
+          onTouchEnd={e => {
+            // preventDefault stops the browser generating a synthetic click after touchEnd,
+            // preventing click-through to buttons beneath when the overlay unmounts.
+            e.preventDefault();
+            e.stopPropagation();
+            handleScreensaverTap();
+          }}
+          onMouseDown={e => { e.stopPropagation(); handleScreensaverTap(); }}
+          onClick={e => e.stopPropagation()}
         />,
         document.body
       )}
@@ -710,6 +823,11 @@ export default function KioskShell() {
       )}
 
       {content}
+
+      {/* Bottom app download banner — Pyramid style. Only on home, not in search/URL-param mode */}
+      {!showResults && !urlParams && (
+        <FooterBanner />
+      )}
 
       {/* Footer version info */}
       {!showResults && tab === 0 && (

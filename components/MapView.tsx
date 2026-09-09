@@ -1,13 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import QRCode from "react-qr-code";
 import { useDataStore } from "@/lib/store";
 import { BLOCKED_WAYFINDER_LOCATION_IDS } from "@/lib/blocked-locations";
 interface Props {
   destinationId: number | null;
   targetFloorCode?: string | null;
+  /** Overrides the localStorage kiosk node (for mobile URL param navigation). */
+  sessionKioskNodeId?: string | null;
   onClose: () => void;
 }
+const PROD_BASE = "https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com";
 const KIOSK_NODE_KEY  = "admin.kiosk.nodeId";
 const ROTATION_KEY    = "admin.nodePickerMap.rotation";
 const SCRIPT_URL = process.env.NEXT_PUBLIC_WAYFINDER_URL ||
@@ -23,10 +27,18 @@ function ensureScript() {
   s.setAttribute("data-wayfinder-script", "1");
   document.head.appendChild(s);
 }
-export default function MapView({ destinationId, targetFloorCode, onClose }: Props) {
-  const { nodes } = useDataStore();
+export default function MapView({ destinationId, targetFloorCode, sessionKioskNodeId, onClose }: Props) {
+  const { nodes, locations } = useDataStore();
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
+  // Tracks the effective kiosk node: session override (URL param) takes priority over localStorage.
+  const sessionKioskNodeIdRef = useRef<string | null>(sessionKioskNodeId ?? null);
+  useEffect(() => { sessionKioskNodeIdRef.current = sessionKioskNodeId ?? null; }, [sessionKioskNodeId]);
+  const getEffectiveKioskNodeId = () =>
+    sessionKioskNodeIdRef.current ?? (typeof window !== "undefined" ? localStorage.getItem(KIOSK_NODE_KEY) : null);
+
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   // Refs to always-current values — let the one-time setup effect access current state.
   const navigateFnRef = useRef<(connectorConstraint?: string | null) => void>(() => {});
   const currentDestRef = useRef<number | null>(destinationId);
@@ -300,7 +312,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
     };
     const applyYouAreHere = () => {
       // Re-apply after ready in case the element was connected before React set the prop.
-      const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
+      const rawNodeId = getEffectiveKioskNodeId();
       if (!rawNodeId) return;
       const kioskNode = nodesRef.current.find(n => n.id === Number(rawNodeId));
       if (!kioskNode) return;
@@ -340,7 +352,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       } catch (_) {}
     };
     const navigate = (connectorConstraint?: string | null) => {
-      const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
+      const rawNodeId = getEffectiveKioskNodeId();
       if (rawNodeId) {
         const kioskNode = nodesRef.current.find(n => n.id === Number(rawNodeId));
         if (kioskNode) {
@@ -432,7 +444,7 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
   // Resolve at render time so the attribute is correct before the element initialises.
   const kioskLocationId = (() => {
     if (typeof window === "undefined") return "";
-    const rawNodeId = localStorage.getItem(KIOSK_NODE_KEY);
+    const rawNodeId = sessionKioskNodeId ?? localStorage.getItem(KIOSK_NODE_KEY);
     if (!rawNodeId) return "";
     const kioskNode = nodes.find(n => n.id === Number(rawNodeId));
     if (!kioskNode) return "";
@@ -446,6 +458,12 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
       );
     return candidates.length > 0 ? String(candidates[0].location!) : "";
   })();
+  const destinationLocation = locations.find(l => l.id === destinationId);
+  const currentKioskNodeId = typeof window !== "undefined" ? getEffectiveKioskNodeId() : null;
+  const qrUrl = currentKioskNodeId && destinationId
+    ? `${PROD_BASE}/index.html?from=${currentKioskNodeId}&to=${destinationId}`
+    : null;
+
   const content = (
     <div
       className="fixed inset-0 z-[60] bg-white"
@@ -470,6 +488,115 @@ export default function MapView({ destinationId, targetFloorCode, onClose }: Pro
             strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+
+      {/* Location detail card — Pyramid style */}
+      {destinationLocation && destinationId && (
+        <div style={{
+          position: "absolute",
+          top: 16, left: 76,
+          zIndex: 10,
+          background: "rgba(255,255,255,0.95)",
+          borderRadius: 8,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.28)",
+          maxWidth: 460,
+          fontFamily: "var(--font-body)",
+          cursor: qrUrl ? "pointer" : "default",
+        }}
+          onClick={qrUrl ? () => setQrModalOpen(true) : undefined}
+        >
+          <div style={{ display: "flex", padding: 14, alignItems: "stretch", gap: 14 }}>
+            {destinationLocation.images?.[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={destinationLocation.images[0]}
+                alt=""
+                style={{ width: 120, flexShrink: 0, objectFit: "cover", display: "block" }}
+                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : (
+              <div style={{
+                width: 120, flexShrink: 0,
+                background: "#DCDCDC", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#9ca3af"/>
+                </svg>
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, justifyContent: "space-between" }}>
+              <div>
+                <p style={{ fontSize: 20, fontFamily: "var(--font-head)", fontWeight: 600, color: "#000", lineHeight: 1.2, wordBreak: "break-word", margin: 0 }}>
+                  {destinationLocation.title}
+                </p>
+                <div style={{ height: 6 }} />
+                {destinationLocation.levelTitles && destinationLocation.levelTitles.length > 0 && (
+                  <p style={{ fontSize: 14, fontWeight: 400, color: "#444", margin: 0 }}>
+                    {destinationLocation.levelTitles.join(" ")}
+                  </p>
+                )}
+              </div>
+              {qrUrl && (
+                <div style={{ background: "#DCDCDC", padding: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ background: "#fff", flexShrink: 0, lineHeight: 0 }}>
+                      <QRCode value={qrUrl} size={66} />
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "#000", margin: 0 }}>
+                        Get live indoor navigation
+                      </p>
+                      <div style={{ height: 5 }} />
+                      <p style={{ fontSize: 12, color: "#000", margin: 0, lineHeight: 1.4 }}>
+                        Scan QR to get live indoor navigation on your phone.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR enlarged modal */}
+      {qrModalOpen && qrUrl && (
+        <div
+          onClick={() => setQrModalOpen(false)}
+          style={{
+            position: "absolute", inset: 0, zIndex: 20,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "#fff", borderRadius: 20, padding: 24,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p style={{ fontSize: 15, fontWeight: 700, color: "#00226B", textAlign: "center" }}>
+              Navigate on your phone
+            </p>
+            <QRCode value={qrUrl} size={220} />
+            <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", maxWidth: 240 }}>
+              Scan this QR code to get live indoor navigation to{" "}
+              <strong>{destinationLocation?.title}</strong> on your phone
+            </p>
+            <button
+              onClick={() => setQrModalOpen(false)}
+              style={{
+                padding: "8px 28px", borderRadius: 20,
+                background: "#00226B", color: "#fff",
+                fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <wayfinder-map
         ref={mapRef}
         className="absolute inset-0 block"
