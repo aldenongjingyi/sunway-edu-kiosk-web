@@ -43,6 +43,17 @@ function formatTimestamp(date: Date | null): string {
   return `${days[date.getDay()]} ${y}-${mo}-${d} ${h}:${mi} ${ap}`;
 }
 
+// Returns true when the kiosk should be in off-hours black screen mode (KL time, UTC+8).
+// TEST: working hours 6:30am–11:50am. Production: change END to 20 * 60 (8pm).
+function isOffHoursKL(): boolean {
+  const now = new Date();
+  const klH = (now.getUTCHours() + 8) % 24;
+  const totalMin = klH * 60 + now.getUTCMinutes();
+  const START = 6 * 60 + 30;  // 6:30am
+  const END   = 20 * 60 + 0;  // 8:00pm
+  return totalMin < START || totalMin >= END;
+}
+
 function formatKLTime(date: Date): string {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -67,6 +78,7 @@ export default function KioskShell() {
   const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
   const [screensaverExpanded, setScreensaverExpanded] = useState(false);
+  const [isOffHours, setIsOffHours] = useState(() => isOffHoursKL());
   const [showResults, setShowResults] = useState(false);
   const [showNodePicker, setShowNodePicker] = useState(false);
   const [mapDestinationId, setMapDestinationId] = useState<number | null>(null);
@@ -238,13 +250,27 @@ export default function KioskShell() {
     return () => clearInterval(check);
   }, [screensaverExpanded]);
 
+  // Re-check off-hours every 30s so the black screen appears/disappears at the boundary.
+  useEffect(() => {
+    const tick = setInterval(() => setIsOffHours(isOffHoursKL()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
+
+  // Dim the screen backlight when the off-hours black overlay is active.
+  // The Android bridge controls WindowManager.LayoutParams.screenBrightness.
+  useEffect(() => {
+    const bridge = (window as { _KioskCache?: { setBrightness?: (v: number) => void } })._KioskCache;
+    if (!bridge?.setBrightness) return;
+    bridge.setBrightness(isOffHours && screensaverExpanded ? 0 : 1);
+  }, [isOffHours, screensaverExpanded]);
+
   // Keep mapOpenRef in sync so resetIdle can read current map state without deps
   useEffect(() => { mapOpenRef.current = mapDestinationId !== null; }, [mapDestinationId]);
 
-  // Disable pull-to-refresh when map or node picker is open
+  // Disable pull-to-refresh when map/node picker is open or off-hours black screen is showing
   useEffect(() => {
-    pullEnabledRef.current = mapDestinationId === null && !showNodePicker;
-  }, [mapDestinationId, showNodePicker]);
+    pullEnabledRef.current = mapDestinationId === null && !showNodePicker && !(isOffHours && screensaverExpanded);
+  }, [mapDestinationId, showNodePicker, isOffHours, screensaverExpanded]);
 
   // Reset idle timer — uses longer timeout while map is open
   const resetIdle = useCallback(() => {
@@ -509,6 +535,18 @@ export default function KioskShell() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Off-hours black screen — sits above everything including screensaver.
+          Touch wakes the kiosk (same as tapping the screensaver). After idle
+          timeout fires and screensaverExpanded returns to true, it reappears. */}
+      {isOffHours && screensaverExpanded && portalMounted && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, background: "#000", zIndex: 300 }}
+          onTouchStart={handleScreensaverTap}
+          onMouseDown={handleScreensaverTap}
+        />,
+        document.body
       )}
 
       {/* Floor picker */}
