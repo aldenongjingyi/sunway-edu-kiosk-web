@@ -71,7 +71,7 @@ interface FloorOption {
   code: string;
 }
 
-const BANNER_QR_URL = "https://sunway-edu-kiosk-web.vercel.app";
+const BANNER_QR_URL = "https://qr.scanto.app/sunway-mycampus/";
 
 function FooterBanner() {
   const [qrExpanded, setQrExpanded] = useState(false);

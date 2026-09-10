@@ -11,7 +11,7 @@ interface Props {
   sessionKioskNodeId?: string | null;
   onClose: () => void;
 }
-const PROD_BASE = "https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com";
+const QR_BASE = "https://maps-sunwayedu.getmallapp.com/qrcode/index.html";
 const KIOSK_NODE_KEY  = "admin.kiosk.nodeId";
 const ROTATION_KEY    = "admin.nodePickerMap.rotation";
 const SCRIPT_URL = process.env.NEXT_PUBLIC_WAYFINDER_URL ||
@@ -461,7 +461,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
   const destinationLocation = locations.find(l => l.id === destinationId);
   const currentKioskNodeId = typeof window !== "undefined" ? getEffectiveKioskNodeId() : null;
   const qrUrl = currentKioskNodeId && destinationId
-    ? `${PROD_BASE}/index.html?from=${currentKioskNodeId}&to=${destinationId}`
+    ? `${QR_BASE}?from=${currentKioskNodeId}&to=${destinationId}`
     : null;
 
   const content = (
