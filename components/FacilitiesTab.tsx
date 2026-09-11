@@ -2,7 +2,7 @@
 import { useDataStore } from "@/lib/store";
 import type { Category } from "@/lib/types";
 
-export default function FacilitiesTab({ onSelect }: { onSelect: (c: Category) => void }) {
+export default function FacilitiesTab({ onSelect, compact }: { onSelect: (c: Category) => void; compact?: boolean }) {
   const categories = useDataStore(s => s.categories);
   const loaded = useDataStore(s => s.loaded);
   const isV1 = false; // design hardcoded in KioskShell.tsx
@@ -52,7 +52,7 @@ export default function FacilitiesTab({ onSelect }: { onSelect: (c: Category) =>
   }
 
   return (
-    <div className="flex-1 ios-scroll">
+    <div className={`flex-1 ${compact ? "compact-scroll" : "ios-scroll"}`}>
       {!loaded && (
         <div className="flex items-center justify-center h-32">
           <div className="w-8 h-8 border-2 border-[#00226B] border-t-transparent rounded-full animate-spin" />

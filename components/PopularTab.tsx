@@ -1,7 +1,7 @@
 "use client";
 import { useDataStore } from "@/lib/store";
 
-export default function PopularTab({ onSelect }: { onSelect: (text: string) => void }) {
+export default function PopularTab({ onSelect, compact }: { onSelect: (text: string) => void; compact?: boolean }) {
   const trendings = useDataStore(s => s.trendings);
   const loaded = useDataStore(s => s.loaded);
   const isV1 = false; // design hardcoded in KioskShell.tsx
@@ -30,9 +30,9 @@ export default function PopularTab({ onSelect }: { onSelect: (text: string) => v
   }
 
   return (
-    <div className="flex-1 ios-scroll flex flex-col">
+    <div className={`flex-1 ${compact ? "compact-scroll" : "ios-scroll"} flex flex-col`}>
       {/* Trending list */}
-      <div className="flex-1 flex flex-col items-center justify-start pt-6">
+      <div className={`flex-1 flex flex-col items-center justify-start ${compact ? "pt-2" : "pt-6"}`}>
         {!loaded && (
           <div className="flex items-center justify-center h-32">
             <div className="w-8 h-8 border-2 border-[#00226B] border-t-transparent rounded-full animate-spin" />

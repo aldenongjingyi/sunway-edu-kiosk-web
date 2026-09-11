@@ -724,6 +724,8 @@ export default function KioskShell() {
     </>
   );
 
+  const compact = !!urlParams;
+
   const content = showResults ? (
     <SearchResults
       query={deferredSearchQuery}
@@ -734,9 +736,9 @@ export default function KioskShell() {
     />
   ) : (
     <>
-      {tab === 0 && <PopularTab onSelect={handlePopularSelect} />}
-      {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} />}
-      {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} />}
+      {tab === 0 && <PopularTab onSelect={handlePopularSelect} compact={compact} />}
+      {tab === 1 && <FacilitiesTab onSelect={handleCategorySelect} compact={compact} />}
+      {tab === 2 && <DepartmentsTab onSelect={handleDepartmentSelect} compact={compact} />}
     </>
   );
 
@@ -803,8 +805,8 @@ export default function KioskShell() {
       {cacheWatermark}
       <div ref={pageRef} className="flex flex-col flex-1 overflow-hidden" style={{ willChange: "transform" }}>
 
-      {/* Search bar */}
-      <div className="flex items-center gap-2 px-4 pt-8 pb-2 flex-shrink-0">
+      {/* Search bar — reduced top padding in mobile QR mode */}
+      <div className={`flex items-center gap-2 px-4 ${urlParams ? "pt-3" : "pt-8"} pb-2 flex-shrink-0`}>
         <input
           ref={inputRef}
           className="search-bar"

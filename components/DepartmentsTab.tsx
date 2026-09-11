@@ -2,7 +2,7 @@
 import { useDataStore } from "@/lib/store";
 import { useEffect } from "react";
 
-export default function DepartmentsTab({ onSelect }: { onSelect: (dept: string) => void }) {
+export default function DepartmentsTab({ onSelect, compact }: { onSelect: (dept: string) => void; compact?: boolean }) {
   const { staffs, loadStaff, staffLoaded } = useDataStore();
   const isV1 = false; // design hardcoded in KioskShell.tsx
 
@@ -30,7 +30,7 @@ export default function DepartmentsTab({ onSelect }: { onSelect: (dept: string) 
   }
 
   return (
-    <div className="flex-1 ios-scroll">
+    <div className={`flex-1 ${compact ? "compact-scroll" : "ios-scroll"}`}>
       {!staffLoaded && (
         <div className="flex items-center justify-center h-32">
           <div className="w-8 h-8 border-2 border-[#00226B] border-t-transparent rounded-full animate-spin" />
