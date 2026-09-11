@@ -159,11 +159,11 @@ function processStaffData(staffs: Staff[], locations: Location[]) {
   });
 }
 
-async function fetchGzip(url: string): Promise<unknown> {
+async function fetchGzip(url: string, timeoutMs = 8000): Promise<unknown> {
   const bust = `&_=${Date.now()}`;
   const t0 = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000); // fail fast offline
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(
       `https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}${bust}`,
@@ -263,10 +263,20 @@ export const useDataStore = create<DataStore>((set, get) => ({
     }
 
     // Fetch fresh from network.
+    // Try static staff.json first (same-origin on QR page, no proxy/captcha issues).
+    // Falls back to the CF Worker proxy which may be captcha-blocked by izone.sunway.edu.my.
     try {
-      const raw = await fetchGzip(
-        "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615"
-      ) as Staff[];
+      let raw: Staff[] | null = null;
+      try {
+        const staticRes = await fetch("https://maps-sunwayedu.getmallapp.com/staff.json", { cache: "no-store" });
+        if (staticRes.ok) raw = await staticRes.json() as Staff[];
+      } catch {}
+      if (!raw) {
+        raw = await fetchGzip(
+          "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615",
+          20000
+        ) as Staff[];
+      }
       try { localStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(raw)); } catch {}
       const staffs = processStaffData(raw, get().locations);
       hdx.addAction("staff.loaded.live", { count: staffs.length });

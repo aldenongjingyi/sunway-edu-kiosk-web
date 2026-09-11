@@ -27,6 +27,7 @@ const SPACE_PREFIX  = "qrcode/";
 
 const WAYFINDER_URL   = "https://maps-sunwayedu.getmallapp.com/wayfinder-map.min.js";
 const WAYFINDER_LOCAL = join(ROOT, "public", "wayfinder-map.min.js");
+const STAFF_URL       = "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615";
 const OUT_DIR         = join(ROOT, "out");
 
 const MIME = {
@@ -123,7 +124,31 @@ function walk(dir, files = []) {
   }));
   console.log(`\n   ✓ ${uploaded} files uploaded + bare index at /${bareKey}`);
 
-  // 4. Cleanup
+  // 4. Fetch staff data and upload as static JSON (bypasses CF Worker captcha issue)
+  console.log("\n⬇  Fetching staff data…");
+  try {
+    const staffRes = await fetch(STAFF_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (staffRes.ok) {
+      const staffBody = await staffRes.text();
+      // Verify it's valid JSON (not a captcha page)
+      JSON.parse(staffBody);
+      await client.send(new PutObjectCommand({
+        Bucket: MAPS_BUCKET,
+        Key: "staff.json",
+        Body: staffBody,
+        ContentType: "application/json",
+        CacheControl: "public, max-age=3600",
+        ACL: "public-read",
+      }));
+      console.log("   ✓ staff.json uploaded");
+    } else {
+      console.log(`   ⚠ Staff fetch failed (${staffRes.status}), skipping`);
+    }
+  } catch (e) {
+    console.log(`   ⚠ Staff fetch error: ${e.message}, skipping`);
+  }
+
+  // 5. Cleanup
   unlinkSync(WAYFINDER_LOCAL);
   console.log("\n✅ Deploy complete.");
   console.log("   https://maps-sunwayedu.getmallapp.com/qrcode/index.html");

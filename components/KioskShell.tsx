@@ -397,9 +397,11 @@ export default function KioskShell() {
     pullEnabledRef.current = mapDestinationId === null && !showNodePicker && !(isOffHours && screensaverExpanded);
   }, [mapDestinationId, showNodePicker, isOffHours, screensaverExpanded]);
 
-  // Reset idle timer — uses longer timeout while map is open
+  // Reset idle timer — uses longer timeout while map is open.
+  // Disabled entirely in QR scan mode (mobile phone, not a kiosk).
   const resetIdle = useCallback(() => {
     if (idleRef.current) clearTimeout(idleRef.current);
+    if (hasQrParamsRef.current) return; // no idle/screensaver on mobile QR page
     const seconds = mapOpenRef.current ? MAP_IDLE_SECONDS : IDLE_SECONDS;
     idleRef.current = setTimeout(() => {
       hdx.addAction("ui.screensaver.expand", { source: mapOpenRef.current ? "map" : "main", idleSeconds: seconds });
