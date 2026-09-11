@@ -52,6 +52,7 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
   // True during the container resize spring animation — blocks drag input.
   // Using a ref (not state) so no extra render is needed.
   const isSizingRef = useRef(false);
+  const screensaverMountedRef = useRef(false);
   const [firstLoaded, setFirstLoaded] = useState(false);
   const loadedUrlsRef = useRef<Set<string>>(new Set());
   const currentIdxRef = useRef(0);
@@ -125,12 +126,17 @@ export default function Screensaver({ isExpanded, onTap }: Props) {
 
   // Reset slide state synchronously before browser paint to prevent layout flash.
   // isSizingRef blocks drag input during the container resize spring animation.
+  // Skip on initial mount — no animation fires, so onTransitionEnd never clears it,
+  // which would permanently block pointer events on the collapsed thumbnail.
   useLayoutEffect(() => {
     isAnimating.current = false;
     commitRef.current = null;
     setSlideAnimate(false);
     setSlideOffset(0);
-    isSizingRef.current = true;
+    if (screensaverMountedRef.current) {
+      isSizingRef.current = true;
+    }
+    screensaverMountedRef.current = true;
   }, [isExpanded]);
 
   // ── Slide logic ───────────────────────────────────────────────────────────
