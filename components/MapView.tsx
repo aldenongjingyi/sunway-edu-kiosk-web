@@ -39,6 +39,22 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
     sessionKioskNodeIdRef.current ?? (typeof window !== "undefined" ? localStorage.getItem(KIOSK_NODE_KEY) : null);
 
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  // On iOS Chrome, re-dispatch window.resize when the tab regains visibility so that
+  // NavMarkerLayer/PinMarkerLayer (which use window.innerHeight) re-measure themselves.
+  // Also force a ResizeObserver re-fire on the wayfinder element so the canvas re-sizes.
+  useEffect(() => {
+    if (!sessionKioskNodeId) return;
+    const handler = () => {
+      if (document.hidden) return;
+      window.dispatchEvent(new Event("resize"));
+      const el = mapRef.current;
+      if (!el) return;
+      el.style.width = "calc(100% - 1px)";
+      requestAnimationFrame(() => { if (el) el.style.width = ""; });
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Refs to always-current values — let the one-time setup effect access current state.
   const navigateFnRef = useRef<(connectorConstraint?: string | null) => void>(() => {});
   const currentDestRef = useRef<number | null>(destinationId);
@@ -71,7 +87,11 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
         return url;
       }
     } catch (_) {}
-    return DATA_URL;
+    // No cache — use proxy so the wayfinder can fetch IndoorCMS data from any origin.
+    // IndoorCMS blocks cross-origin requests; the direct URL fails on first visit from
+    // maps-sunwayedu.getmallapp.com. The proxy allows any of our whitelisted origins.
+    // The fetch useEffect below will cache the filtered data for subsequent loads.
+    return `${PROXY_URL}/?url=${encodeURIComponent(DATA_URL)}`;
   });
   useEffect(() => {
     // Fetch fresh data, filter blocked locations, update localStorage for next load.
@@ -98,6 +118,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
       "locate-focus":            "Destination",
       "nav-connector-lift":      "Lift Only",
       "nav-connector-escalator": "Escalator Only",
+      "nav-connector-stairs":    "Stairs Only",
     };
     const attachTooltips = () => {
       // Inject kiosk overrides into wayfinder shadow DOM.
@@ -133,7 +154,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
           .wayfinder-locate-controls [data-action='locate-here'] {
             display: none !important;
           }
-          /* Always show lift/escalator connectors */
+          /* Always show lift/escalator/stairs connectors */
           .wayfinder-locate-button--connector {
             display: grid !important;
           }
@@ -150,10 +171,16 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
             filter: brightness(0) !important;
           }
           /* Active (connector toggled on): blue background, white icon */
-          .wayfinder-locate-button[data-active='true'] {
+          .wayfinder-locate-button[data-active='true'],
+          [data-action="nav-connector-lift"][data-active='true'],
+          [data-action="nav-connector-escalator"][data-active='true'],
+          [data-action="nav-connector-stairs"][data-active='true'] {
             background-color: #6E96FF !important;
           }
-          .wayfinder-locate-button[data-active='true'] img {
+          .wayfinder-locate-button[data-active='true'] img,
+          [data-action="nav-connector-lift"][data-active='true'] img,
+          [data-action="nav-connector-escalator"][data-active='true'] img,
+          [data-action="nav-connector-stairs"][data-active='true'] img {
             filter: brightness(0) invert(1) !important;
           }
 
@@ -226,23 +253,28 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
         try {
           const btn = e.composedPath().find((el) => {
             const action = (el as HTMLElement).dataset?.action;
-            return action === "nav-connector-lift" || action === "nav-connector-escalator";
+            return action === "nav-connector-lift" || action === "nav-connector-escalator" || action === "nav-connector-stairs";
           }) as HTMLElement | undefined;
           if (!btn) return;
 
           e.stopImmediatePropagation();
 
-          const constraint = btn.dataset.action === "nav-connector-lift" ? "lift-only" : "escalator-only";
+          const CONNECTOR_CONSTRAINTS: Record<string, string> = {
+            "nav-connector-lift":      "lift-only",
+            "nav-connector-escalator": "escalator-only",
+            "nav-connector-stairs":    "stairs-only",
+          };
+          const constraint = CONNECTOR_CONSTRAINTS[btn.dataset.action!];
           const newMode = connectorModeRef.current === constraint ? null : constraint;
           connectorModeRef.current = newMode;
 
-          // Update button active states — engine's #Ur won't run since we stopped the event.
+          // Update button active states — engine's handler won't run since we stopped the event.
           const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
           if (shadow) {
-            const liftBtn = shadow.querySelector<HTMLElement>('[data-action="nav-connector-lift"]');
-            const escBtn  = shadow.querySelector<HTMLElement>('[data-action="nav-connector-escalator"]');
-            if (liftBtn) liftBtn.dataset.active = newMode === "lift-only"      ? "true" : "false";
-            if (escBtn)  escBtn.dataset.active  = newMode === "escalator-only" ? "true" : "false";
+            for (const [action, mode] of Object.entries(CONNECTOR_CONSTRAINTS)) {
+              const el = shadow.querySelector<HTMLElement>(`[data-action="${action}"]`);
+              if (el) el.dataset.active = newMode === mode ? "true" : "false";
+            }
           }
 
           navigateFnRef.current(newMode);
@@ -271,6 +303,8 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
             setTimeout(() => {
               try {
                 const el = map as HTMLElement & { setFloor: (c: string) => void; centerOn: (x: number, y: number, o?: object) => void };
+                // Explicit floor pick: center on destination floor/point.
+                // Otherwise: center on start (kiosk "you are here") so user sees their position.
                 const floorCode = targetFloorCodeRef.current ?? sf;
                 const cx = targetFloorCodeRef.current ? epx : spx;
                 const cy = targetFloorCodeRef.current ? epy : spy;
@@ -328,13 +362,27 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
         );
       if (candidates.length > 0) map.setAttribute("you-are-here-node-id", String(candidates[0].location!));
     };
-    const setup = () => { applyYouAreHere(); applyRotation(); attachTooltips(); interceptConnectors(); routeFloorIndicators(); autoScrollLevel(); };
+    const setup = () => {
+      applyYouAreHere(); applyRotation(); attachTooltips(); interceptConnectors(); routeFloorIndicators(); autoScrollLevel();
+      // On iOS Chrome, getBoundingClientRect() returns wrong dimensions when the element
+      // first connects (layout not yet complete). Force ResizeObserver to re-fire with
+      // correct dimensions by briefly changing the element width by 1px then restoring it.
+      // Only needed in QR mode — kiosk runs on Android where this isn't an issue.
+      if (sessionKioskNodeIdRef.current) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const el = mapRef.current;
+          if (!el) return;
+          el.style.width = "calc(100% - 1px)";
+          requestAnimationFrame(() => { if (el) el.style.width = ""; });
+        }));
+      }
+    };
     if ((map as HTMLElement & { isInitialized?: boolean }).isInitialized) {
       setup();
     } else {
       map.addEventListener("ready", setup, { once: true });
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const map = mapRef.current as (HTMLElement & {
       isInitialized: boolean;
@@ -410,10 +458,10 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
               try {
                 const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
                 if (shadow) {
-                  const liftBtn = shadow.querySelector<HTMLElement>('[data-action="nav-connector-lift"]');
-                  const escBtn  = shadow.querySelector<HTMLElement>('[data-action="nav-connector-escalator"]');
-                  if (liftBtn) liftBtn.dataset.active = "false";
-                  if (escBtn)  escBtn.dataset.active  = "false";
+                  ["nav-connector-lift", "nav-connector-escalator", "nav-connector-stairs"].forEach(action => {
+                    const el = shadow.querySelector<HTMLElement>(`[data-action="${action}"]`);
+                    if (el) el.dataset.active = "false";
+                  });
                 }
               } catch (_) {}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -426,6 +474,11 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
           }
         }
       }
+      // If we have a kiosk node ID but nodes haven't loaded yet, skip focusLocation.
+      // The [nodes.length] dependency will rerun this effect with real data so navigateTo
+      // is called directly — avoiding the focusLocation→navigateTo transition that causes
+      // conflicting view animations on first QR scan.
+      if (rawNodeId && nodesRef.current.length === 0) return;
       map.focusLocation(destinationId);
       // focusLocation only calls setFloor when floor changes, so always scroll after
       setTimeout(scrollActiveLevel, 100);
@@ -439,7 +492,10 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
       // white canvas on first open.
       map.addEventListener("ready", () => setTimeout(navigate, 0), { once: true });
     }
-  }, [destinationId]); // nodesRef used instead of nodes to avoid double-navigation
+  // nodes.length added so the effect retries when data loads on mobile (first-load race fix):
+  // wayfinder may fire ready before IndoorCMS nodes are fetched, causing fallback to focusLocation.
+  // When nodes arrive, this effect reruns and navigateTo succeeds.
+  }, [destinationId, nodes.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Wayfinder expects a location ID for you-are-here-node-id, not an IndoorCMS node ID.
   // Resolve at render time so the attribute is correct before the element initialises.
   const kioskLocationId = (() => {
@@ -460,37 +516,27 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
   })();
   const destinationLocation = locations.find(l => l.id === destinationId);
   const currentKioskNodeId = typeof window !== "undefined" ? getEffectiveKioskNodeId() : null;
-  const qrUrl = currentKioskNodeId && destinationId
+  const qrUrl = currentKioskNodeId && destinationId && !sessionKioskNodeId
     ? `${QR_BASE}?from=${currentKioskNodeId}&to=${destinationId}`
     : null;
 
   const content = (
     <div
-      className="fixed inset-0 z-[60] bg-white"
+      className="fixed z-[60] bg-white"
       style={{
+        // Use 100dvh (dynamic viewport height) in QR mode so the container always fills
+        // the visible screen on iOS Chrome — dvh updates as browser chrome shows/hides,
+        // triggering the wayfinder's ResizeObserver to re-measure and correct the canvas.
+        // inset-0 is used for kiosk (Android WebView) where this isn't needed.
+        top: 0, left: 0, right: 0,
+        height: sessionKioskNodeId ? "100dvh" : "100%",
+        bottom: sessionKioskNodeId ? undefined : 0,
         visibility: destinationId ? "visible" : "hidden",
         pointerEvents: destinationId ? "auto" : "none",
       }}
     >
-      {/* Back button — floating circle, matches wayfinder control style */}
-      <button
-        onClick={onClose}
-        style={{
-          position: "absolute", top: 16, left: 16, zIndex: 10,
-          width: 44, height: 44, borderRadius: "50%",
-          background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          border: "none", cursor: "pointer",
-        }}
-      >
-        <svg width="9" height="15" viewBox="0 0 9 15" fill="none">
-          <path d="M8 1L1.5 7.5 8 14" stroke="#00226B" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-
-      {/* Location detail card — Pyramid style */}
-      {destinationLocation && destinationId && (
+      {/* Location detail card — Pyramid style. Hidden in mobile QR-scan mode (sessionKioskNodeId set). */}
+      {destinationLocation && destinationId && !sessionKioskNodeId && (
         <div style={{
           position: "absolute",
           top: 16, left: 76,
@@ -600,7 +646,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
       <wayfinder-map
         ref={mapRef}
         className="absolute inset-0 block"
-data-url={mapDataUrl || undefined}
+        data-url={mapDataUrl || undefined}
         map-url={mapDataUrl ? MAP_URL : undefined}
         route-mode="lift"
         level-selector=""
@@ -616,5 +662,46 @@ data-url={mapDataUrl || undefined}
       />
     </div>
   );
-  return createPortal(content, document.body);
+  // Mobile QR: portal the back button so it composites above the wayfinder GPU layer on iOS Chrome.
+  // Same GPU compositing issue as Android WebView — must be at document.body level to appear above.
+  const mobileQrBackButton = sessionKioskNodeId && destinationId ? createPortal(
+    <button
+      onClick={onClose}
+      style={{
+        position: "fixed", top: 16, left: 16, zIndex: 9999,
+        width: 44, height: 44, borderRadius: "50%",
+        background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        border: "none", cursor: "pointer",
+      }}
+    >
+      <svg width="9" height="15" viewBox="0 0 9 15" fill="none">
+        <path d="M8 1L1.5 7.5 8 14" stroke="#00226B" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>,
+    document.body
+  ) : null;
+
+  // Kiosk: portal the back button so it composites above the wayfinder GPU layer on Android WebView.
+  const kioskBackButton = !sessionKioskNodeId && destinationId ? createPortal(
+    <button
+      onClick={onClose}
+      style={{
+        position: "fixed", top: 16, left: 16, zIndex: 9999,
+        width: 44, height: 44, borderRadius: "50%",
+        background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        border: "none", cursor: "pointer",
+      }}
+    >
+      <svg width="9" height="15" viewBox="0 0 9 15" fill="none">
+        <path d="M8 1L1.5 7.5 8 14" stroke="#00226B" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>,
+    document.body
+  ) : null;
+
+  return <>{createPortal(content, document.body)}{kioskBackButton}{mobileQrBackButton}</>;
 }
