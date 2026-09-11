@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useDeferredValue, useEffect, useRef, startTransition, useState } from "react";
 import { createPortal } from "react-dom";
-import QRCode from "react-qr-code";
 import { useDataStore } from "@/lib/store";
 import { hdx } from "@/lib/hdx";
 import { BLOCKED_WAYFINDER_LOCATION_IDS } from "@/lib/blocked-locations";
@@ -98,7 +97,8 @@ function FooterBanner() {
             <p style={{ fontSize: 15, fontWeight: 700, color: "#00226B", textAlign: "center" }}>
               Navigate on your phone
             </p>
-            <QRCode value={BANNER_QR_URL} size={280} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/banner-qr.png" alt="QR" style={{ width: 280, height: 280 }} />
             <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", maxWidth: 260 }}>
               Scan this QR code to get live indoor navigation on your phone.
             </p>
@@ -143,12 +143,13 @@ function FooterBanner() {
         />
 
         {/* QR code — tap to enlarge (Pyramid behaviour) */}
-        <div
-          style={{ background: "#fff", padding: 4, flexShrink: 0, cursor: "pointer", lineHeight: 0 }}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/banner-qr.png"
+          alt="QR"
+          style={{ width: 62, height: 62, flexShrink: 0, cursor: "pointer" }}
           onClick={() => setQrExpanded(true)}
-        >
-          <QRCode value={BANNER_QR_URL} size={62} />
-        </div>
+        />
       </div>
     </>
   );
@@ -160,19 +161,17 @@ let portalMountedGlobal = false;
 export default function KioskShell() {
   const { loadData, loadStaff, locations, nodes, levels, lastRefreshed, lastStaffRefreshed, loaded } = useDataStore();
 
-  // Parse ?from=<nodeId>&to=<locationId> URL params (set synchronously so all initial
-  // state below can depend on them).
-  const [urlParams] = useState<{ from: string; to: number } | null>(() => {
-    if (typeof window === "undefined") return null;
-    const p = new URLSearchParams(window.location.search);
-    const from = p.get("from");
-    const to = p.get("to");
-    if (from && to) {
-      const toId = parseInt(to, 10);
-      if (!isNaN(toId) && toId > 0) return { from, to: toId };
-    }
-    return null;
-  });
+  // Parse ?from=<nodeId>&to=<locationId> URL params in useEffect so the initial
+  // render matches the SSR output (no map) — avoids React hydration mismatch #418
+  // which caused the map to render against an unstable iOS Safari viewport on first scan.
+  const [urlParams, setUrlParams] = useState<{ from: string; to: number } | null>(null);
+  // Synchronous ref so the async loadData callback can check URL params without closure issues.
+  // useState is set in a useEffect (deferred), so it's always null inside the loadData callback.
+  const hasQrParamsRef = useRef(
+    typeof window !== "undefined"
+      ? (() => { const p = new URLSearchParams(window.location.search); return !!(p.get("from") && p.get("to")); })()
+      : false
+  );
 
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
@@ -182,9 +181,9 @@ export default function KioskShell() {
   const [isOffHours, setIsOffHours] = useState(() => isOffHoursKL());
   const [showResults, setShowResults] = useState(false);
   const [showNodePicker, setShowNodePicker] = useState(false);
-  const [mapDestinationId, setMapDestinationId] = useState<number | null>(() => urlParams?.to ?? null);
+  const [mapDestinationId, setMapDestinationId] = useState<number | null>(null);
   const [mapTargetFloorCode, setMapTargetFloorCode] = useState<string | null>(null);
-  const [mapMounted, setMapMounted] = useState(() => urlParams !== null);
+  const [mapMounted, setMapMounted] = useState(false);
   const [notProvisionedAlert, setNotProvisionedAlert] = useState(false);
   const [noNodeAlert, setNoNodeAlert] = useState(false);
   const [floorPicker, setFloorPicker] = useState<{ locationId: number; floors: FloorOption[] } | null>(null);
@@ -312,6 +311,24 @@ export default function KioskShell() {
 
   // Load data on mount, expand screensaver once highlights are ready
   // Also reopen admin panel if we just reloaded after saving a kiosk node
+  // Read URL params after mount — deferred so first render matches SSR output,
+  // avoiding React hydration mismatch that caused layout issues on iOS Safari first scan.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const from = p.get("from");
+    const to = p.get("to");
+    if (from && to) {
+      const toId = parseInt(to, 10);
+      if (!isNaN(toId) && toId > 0) {
+        // Provision browser with this kiosk node so navigation works after closing the map.
+        localStorage.setItem(KIOSK_NODE_KEY, from);
+        setUrlParams({ from, to: toId });
+        setMapDestinationId(toId);
+        setMapMounted(true);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (sessionStorage.getItem("admin.reopen")) {
       sessionStorage.removeItem("admin.reopen");
@@ -323,7 +340,7 @@ export default function KioskShell() {
       // Skip screensaver when launched via QR URL param — user wants the map immediately.
       // During off-hours, also skip immediate expansion — let the idle timer trigger the
       // black screen after 30s of no interaction instead of showing it on every load/refresh.
-      if (!urlParams && !isOffHoursKL()) setScreensaverExpanded(true);
+      if (!hasQrParamsRef.current && !isOffHoursKL()) setScreensaverExpanded(true);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadData, loadStaff]);

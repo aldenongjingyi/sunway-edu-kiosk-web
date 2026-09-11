@@ -17,7 +17,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full overflow-hidden bg-white">
+      <body className="h-full overflow-hidden bg-white" suppressHydrationWarning>
         <HyperDXInit />
         {children}
       </body>
