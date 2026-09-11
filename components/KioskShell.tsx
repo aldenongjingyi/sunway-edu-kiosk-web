@@ -19,6 +19,7 @@ const MAP_IDLE_SECONDS = 120; // longer timeout while map is open
 const RELOAD_INTERVAL_MS = 30 * 60 * 1000; // check for new build every 30 min while screensaver is active
 const ADMIN_CODE = "my3245campusx";
 const KIOSK_NODE_KEY = "admin.kiosk.nodeId";
+const ASSET_PREFIX = process.env.NEXT_PUBLIC_ASSET_PREFIX ?? "";
 
 const TABS_DEFAULT = ["Popular Searches", "Facilities / Offices", "Departments / Staffs"] as const;
 const TABS_V1 = ["Popular Searches", "Facilities / Offices", "Departments"] as const;
@@ -98,7 +99,7 @@ function FooterBanner() {
               Navigate on your phone
             </p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/banner-qr.png" alt="QR" style={{ width: 280, height: 280 }} />
+            <img src={`${ASSET_PREFIX}/banner-qr.png`} alt="QR" style={{ width: 280, height: 280 }} />
             <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", maxWidth: 260 }}>
               Scan this QR code to get live indoor navigation on your phone.
             </p>
@@ -127,7 +128,7 @@ function FooterBanner() {
         {/* QR code — tap to enlarge (Pyramid behaviour) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/banner-qr.png"
+          src={`${ASSET_PREFIX}/banner-qr.png`}
           alt="QR"
           style={{ width: 62, height: 62, flexShrink: 0, cursor: "pointer" }}
           onClick={() => setQrExpanded(true)}
@@ -136,7 +137,7 @@ function FooterBanner() {
         {/* App icon */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/mycampus-icon.png"
+          src={`${ASSET_PREFIX}/mycampus-icon.png`}
           alt="MyCampus"
           style={{ width: 62, height: 62, flexShrink: 0 }}
         />

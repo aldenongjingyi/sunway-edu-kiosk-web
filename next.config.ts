@@ -17,8 +17,10 @@ const nextConfig: NextConfig = {
   env: {
     ...(isQrcode ? {
       NEXT_PUBLIC_WAYFINDER_URL: "https://maps-sunwayedu.getmallapp.com/qrcode/wayfinder-map.min.js",
+      NEXT_PUBLIC_ASSET_PREFIX: "https://maps-sunwayedu.getmallapp.com/qrcode",
     } : isProd ? {
       NEXT_PUBLIC_WAYFINDER_URL: "https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com/wayfinder-map.min.js",
+      NEXT_PUBLIC_ASSET_PREFIX: "https://sgp1.digitaloceanspaces.com/kiosk-sunwayedu.getmallapp.com",
     } : {}),
   },
   // Cache-Control headers are set per-file in scripts/deploy.mjs
