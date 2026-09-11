@@ -846,8 +846,8 @@ export default function KioskShell() {
         <FooterBanner />
       )}
 
-      {/* Footer version info */}
-      {!showResults && tab === 0 && (
+      {/* Footer version info — hidden in mobile QR mode */}
+      {!showResults && tab === 0 && !urlParams && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
           <p>Version 1.0 Build #30</p>
           <p>Refreshed {formatKLTime(pageLoadTime)}</p>
