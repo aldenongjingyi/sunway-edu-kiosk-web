@@ -24,8 +24,17 @@ export async function initHDX() {
     tracePropagationTargets: [],
     consoleCapture: false,
     advancedNetworkCapture: false,
-    instrumentations: { document: false, postload: false, fetch: false, xhr: false, interactions: false, longtask: false, webvitals: false },
+    instrumentations: { console: false, document: false, errors: false, fetch: false, interactions: false, longtask: false, postload: false, visibility: false, connectivity: false, webvitals: false, xhr: false },
   });
+
+  // Device tagging — detect source and kiosk node ID
+  const params = new URLSearchParams(window.location.search);
+  const hasKioskBridge = "_KioskCache" in window;
+  const hasQrParams = !!(params.get("from") && params.get("to"));
+  const source = hasKioskBridge ? "kiosk" : hasQrParams ? "qr" : "browser";
+  const kioskNodeId = params.get("from") || localStorage.getItem("admin.kiosk.nodeId") || "";
+  HyperDX.setGlobalAttributes({ source, kioskNodeId });
+
   _hdx = HyperDX;
 }
 

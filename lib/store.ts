@@ -170,12 +170,21 @@ async function fetchGzip(url: string, timeoutMs = 8000): Promise<unknown> {
       { cache: "no-store", signal: controller.signal }
     );
     const ms = Date.now() - t0;
-    if (!res.ok) {
-      hdx.addAction("api.fetch.error", { url, status: res.status, ms });
-      throw new Error(`Failed to fetch ${url}`);
-    }
-    hdx.addAction("api.fetch.success", { url, status: res.status, ms });
-    return res.json();
+    const text = await res.text();
+    hdx.addAction("api.call", {
+      method: "GET", url, status: res.status, ms, ok: res.ok,
+      responseBody: text.slice(0, 200),
+    });
+    if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+    return JSON.parse(text);
+  } catch (e) {
+    if ((e as Error).message?.startsWith("Failed to fetch ")) throw e;
+    const ms = Date.now() - t0;
+    hdx.addAction("api.call", {
+      method: "GET", url, status: 0, ms, ok: false,
+      responseBody: String(e).slice(0, 200),
+    });
+    throw e;
   } finally {
     clearTimeout(timer);
   }
@@ -205,17 +214,10 @@ export const useDataStore = create<DataStore>((set, get) => ({
         if (cached) {
           const raw = JSON.parse(cached) as KioskData;
           const processed = processKioskData(raw);
-          hdx.addAction("data.loaded.cache", {
-            locations: processed.locations.length,
-            highlights: processed.highlights.length,
-            trendings: processed.trendings.length,
-            nodes: processed.nodes.length,
-          });
           set({ ...processed, loaded: true, lastRefreshed: null });
         }
       } catch (ce) {
         console.error("Cache load failed", ce);
-        hdx.addAction("data.cache.error", { error: String(ce) });
       }
     }
 
@@ -224,17 +226,9 @@ export const useDataStore = create<DataStore>((set, get) => ({
       const raw = await fetchGzip("https://sunwayedu3-data.indoorcms.com/datas_v001.json.gz") as KioskData;
       try { localStorage.setItem(KIOSK_CACHE_KEY, JSON.stringify(raw)); } catch {}
       const processed = processKioskData(raw);
-      hdx.addAction("data.loaded.live", {
-        locations: processed.locations.length,
-        highlights: processed.highlights.length,
-        trendings: processed.trendings.length,
-        nodes: processed.nodes.length,
-      });
       set({ ...processed, loaded: true, lastRefreshed: new Date() });
     } catch (e) {
       console.error("Network fetch failed, using cache", e);
-      hdx.addAction("data.load.failed", { error: String(e) });
-      if (!get().loaded) hdx.addAction("data.cache.miss", {});
     }
   },
 
@@ -253,12 +247,10 @@ export const useDataStore = create<DataStore>((set, get) => ({
         if (cached) {
           const raw = JSON.parse(cached) as Staff[];
           const staffs = processStaffData(raw, get().locations);
-          hdx.addAction("staff.loaded.cache", { count: staffs.length });
           set({ staffs, staffLoaded: true, lastStaffRefreshed: null });
         }
       } catch (ce) {
         console.error("Staff cache load failed", ce);
-        hdx.addAction("staff.cache.error", { error: String(ce) });
       }
     }
 
@@ -267,10 +259,23 @@ export const useDataStore = create<DataStore>((set, get) => ({
     // Falls back to the CF Worker proxy which may be captcha-blocked by izone.sunway.edu.my.
     try {
       let raw: Staff[] | null = null;
+      const staffUrl = "https://maps-sunwayedu.getmallapp.com/staff.json";
       try {
-        const staticRes = await fetch("https://maps-sunwayedu.getmallapp.com/staff.json", { cache: "no-store" });
-        if (staticRes.ok) raw = await staticRes.json() as Staff[];
-      } catch {}
+        const st0 = Date.now();
+        const staticRes = await fetch(staffUrl, { cache: "no-store" });
+        const staffText = await staticRes.text();
+        hdx.addAction("api.call", {
+          method: "GET", url: staffUrl, status: staticRes.status,
+          ms: Date.now() - st0, ok: staticRes.ok,
+          responseBody: staffText.slice(0, 200),
+        });
+        if (staticRes.ok) raw = JSON.parse(staffText) as Staff[];
+      } catch (se) {
+        hdx.addAction("api.call", {
+          method: "GET", url: staffUrl, status: 0, ms: 0, ok: false,
+          responseBody: String(se).slice(0, 200),
+        });
+      }
       if (!raw) {
         raw = await fetchGzip(
           "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615",
@@ -279,12 +284,9 @@ export const useDataStore = create<DataStore>((set, get) => ({
       }
       try { localStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(raw)); } catch {}
       const staffs = processStaffData(raw, get().locations);
-      hdx.addAction("staff.loaded.live", { count: staffs.length });
       set({ staffs, staffLoaded: true, lastStaffRefreshed: new Date() });
     } catch (e) {
       console.error("Staff network fetch failed, using cache", e);
-      hdx.addAction("staff.load.failed", { error: String(e) });
-      if (!get().staffLoaded) hdx.addAction("staff.cache.miss", {});
     }
   },
 }));
