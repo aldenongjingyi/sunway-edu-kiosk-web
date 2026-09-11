@@ -44,13 +44,13 @@ function formatTimestamp(date: Date | null): string {
 }
 
 // Returns true when the kiosk should be in off-hours black screen mode (KL time, UTC+8).
-// TEST: working hours 6:30am–11:50am. Production: change END to 20 * 60 (8pm).
+// Working hours: 6:30am–8pm KL time.
 function isOffHoursKL(): boolean {
   const now = new Date();
   const klH = (now.getUTCHours() + 8) % 24;
   const totalMin = klH * 60 + now.getUTCMinutes();
   const START = 6 * 60 + 30;  // 6:30am
-  const END   = 17 * 60 + 30; // 5:30pm — TEST (production: 20 * 60)
+  const END   = 20 * 60;      // 8pm
   return totalMin < START || totalMin >= END;
 }
 
@@ -124,15 +124,14 @@ function FooterBanner() {
         padding: "14px 20px", gap: 16,
         fontFamily: "var(--font-body)",
       }}>
-        {/* Text */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 5 }}>
-            Navigate using your phone!
-          </p>
-          <p style={{ fontSize: 12, fontWeight: 300, color: "rgba(255,255,255,0.85)", lineHeight: 1.4 }}>
-            Scan and download our MyCampus Mobile App now!
-          </p>
-        </div>
+        {/* QR code — tap to enlarge (Pyramid behaviour) */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/banner-qr.png"
+          alt="QR"
+          style={{ width: 62, height: 62, flexShrink: 0, cursor: "pointer" }}
+          onClick={() => setQrExpanded(true)}
+        />
 
         {/* App icon */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -142,14 +141,15 @@ function FooterBanner() {
           style={{ width: 62, height: 62, flexShrink: 0 }}
         />
 
-        {/* QR code — tap to enlarge (Pyramid behaviour) */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/banner-qr.png"
-          alt="QR"
-          style={{ width: 62, height: 62, flexShrink: 0, cursor: "pointer" }}
-          onClick={() => setQrExpanded(true)}
-        />
+        {/* Text */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 5 }}>
+            Navigate using your phone!
+          </p>
+          <p style={{ fontSize: 12, fontWeight: 300, color: "rgba(255,255,255,0.85)", lineHeight: 1.4 }}>
+            Scan and download our MyCampus Mobile App now!
+          </p>
+        </div>
       </div>
     </>
   );
@@ -342,7 +342,7 @@ export default function KioskShell() {
       loadStaff();
       // Skip screensaver when launched via QR URL param — user wants the map immediately.
       // During off-hours, also skip immediate expansion — let the idle timer trigger the
-      // black screen after 30s of no interaction instead of showing it on every load/refresh.
+      // black screen after IDLE_SECONDS of no interaction instead of showing it on every load/refresh.
       if (!hasQrParamsRef.current && !isOffHoursKL()) setScreensaverExpanded(true);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
