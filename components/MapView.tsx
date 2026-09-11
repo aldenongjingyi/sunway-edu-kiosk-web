@@ -63,6 +63,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
   useEffect(() => {
     currentDestRef.current = destinationId;
     connectorModeRef.current = null; // reset connector mode when destination changes
+    mapRef.current?.removeAttribute("data-connector-mode");
   }, [destinationId]);
   const targetFloorCodeRef = useRef(targetFloorCode);
   useEffect(() => { targetFloorCodeRef.current = targetFloorCode; }, [targetFloorCode]);
@@ -170,17 +171,25 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
           .wayfinder-locate-button:not([data-active='true']) img {
             filter: brightness(0) !important;
           }
-          /* Active (connector toggled on): blue background, white icon */
-          .wayfinder-locate-button[data-active='true'],
-          [data-action="nav-connector-lift"][data-active='true'],
-          [data-action="nav-connector-escalator"][data-active='true'],
-          [data-action="nav-connector-stairs"][data-active='true'] {
+          /* Active (non-connector): blue background, white icon — uses engine's data-active */
+          .wayfinder-locate-button[data-active='true'] {
             background-color: #6E96FF !important;
           }
-          .wayfinder-locate-button[data-active='true'] img,
-          [data-action="nav-connector-lift"][data-active='true'] img,
-          [data-action="nav-connector-escalator"][data-active='true'] img,
-          [data-action="nav-connector-stairs"][data-active='true'] img {
+          .wayfinder-locate-button[data-active='true'] img {
+            filter: brightness(0) invert(1) !important;
+          }
+
+          /* Connector buttons: styled via host attribute data-connector-mode.
+             The engine can reset data-active at will — we ignore it for connectors.
+             :host() reads our custom attribute on <wayfinder-map> which the engine never touches. */
+          :host([data-connector-mode='lift-only']) [data-action='nav-connector-lift'],
+          :host([data-connector-mode='escalator-only']) [data-action='nav-connector-escalator'],
+          :host([data-connector-mode='stairs-only']) [data-action='nav-connector-stairs'] {
+            background-color: #6E96FF !important;
+          }
+          :host([data-connector-mode='lift-only']) [data-action='nav-connector-lift'] img,
+          :host([data-connector-mode='escalator-only']) [data-action='nav-connector-escalator'] img,
+          :host([data-connector-mode='stairs-only']) [data-action='nav-connector-stairs'] img {
             filter: brightness(0) invert(1) !important;
           }
 
@@ -268,13 +277,12 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
           const newMode = connectorModeRef.current === constraint ? null : constraint;
           connectorModeRef.current = newMode;
 
-          // Update button active states — engine's handler won't run since we stopped the event.
-          const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
-          if (shadow) {
-            for (const [action, mode] of Object.entries(CONNECTOR_CONSTRAINTS)) {
-              const el = shadow.querySelector<HTMLElement>(`[data-action="${action}"]`);
-              if (el) el.dataset.active = newMode === mode ? "true" : "false";
-            }
+          // Set connector mode on the host element — CSS :host() selector in shadow DOM
+          // reads this to style connector buttons. Engine never touches this attribute.
+          if (newMode) {
+            map.setAttribute("data-connector-mode", newMode);
+          } else {
+            map.removeAttribute("data-connector-mode");
           }
 
           navigateFnRef.current(newMode);
@@ -451,19 +459,9 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
               setTimeout(scrollActiveLevel, 100);
               return;
             }
-            // Constrained route failed (e.g. no escalator on this path) — reset button state
-            // and fall back to unconstrained route so a path is always shown.
+            // Constrained route failed (e.g. no escalator on this path) — keep button
+            // blue (reflects user's intent) but fall back to unconstrained route.
             if (connectorConstraint != null) {
-              connectorModeRef.current = null;
-              try {
-                const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
-                if (shadow) {
-                  ["nav-connector-lift", "nav-connector-escalator", "nav-connector-stairs"].forEach(action => {
-                    const el = shadow.querySelector<HTMLElement>(`[data-action="${action}"]`);
-                    if (el) el.dataset.active = "false";
-                  });
-                }
-              } catch (_) {}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const fallback = (map as any).navigateTo({ from: fromLocation, to: destinationId });
               if (fallback?.success) {

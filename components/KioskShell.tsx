@@ -178,6 +178,9 @@ export default function KioskShell() {
   const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const [filterDepartment, setFilterDepartment] = useState<string | null>(null);
   const [screensaverExpanded, setScreensaverExpanded] = useState(false);
+  // True when screensaver was expanded by manual tap (not idle timeout).
+  // Off-hours black screen only shows on idle expansion, not manual.
+  const [screensaverManual, setScreensaverManual] = useState(false);
   const [isOffHours, setIsOffHours] = useState(() => isOffHoursKL());
   const [showResults, setShowResults] = useState(false);
   const [showNodePicker, setShowNodePicker] = useState(false);
@@ -383,8 +386,8 @@ export default function KioskShell() {
   useEffect(() => {
     const bridge = (window as { _KioskCache?: { setBrightness?: (v: number) => void } })._KioskCache;
     if (!bridge?.setBrightness) return;
-    bridge.setBrightness(isOffHours && screensaverExpanded ? 0 : 1);
-  }, [isOffHours, screensaverExpanded]);
+    bridge.setBrightness(isOffHours && screensaverExpanded && !screensaverManual ? 0 : 1);
+  }, [isOffHours, screensaverExpanded, screensaverManual]);
 
   // Keep mapOpenRef in sync so resetIdle can read current map state without deps
   useEffect(() => { mapOpenRef.current = mapDestinationId !== null; }, [mapDestinationId]);
@@ -400,6 +403,7 @@ export default function KioskShell() {
     const seconds = mapOpenRef.current ? MAP_IDLE_SECONDS : IDLE_SECONDS;
     idleRef.current = setTimeout(() => {
       hdx.addAction("ui.screensaver.expand", { source: mapOpenRef.current ? "map" : "main", idleSeconds: seconds });
+      setScreensaverManual(false); // idle expansion — respect off-hours black screen
       setScreensaverExpanded(true);
       setQuery("");
       setFilterCategory(null);
@@ -441,10 +445,10 @@ export default function KioskShell() {
   }, []);
 
   const handleScreensaverTap = () => {
-    setScreensaverExpanded(prev => {
-      if (prev) hdx.addAction("ui.screensaver.dismiss");
-      return !prev;
-    });
+    const expanding = !screensaverExpanded;
+    if (!expanding) hdx.addAction("ui.screensaver.dismiss");
+    setScreensaverExpanded(expanding);
+    setScreensaverManual(expanding); // manual tap → never show off-hours black
     resetIdle();
   };
 
@@ -662,7 +666,7 @@ export default function KioskShell() {
       {/* Off-hours black screen — sits above everything including screensaver.
           Touch wakes the kiosk (same as tapping the screensaver). After idle
           timeout fires and screensaverExpanded returns to true, it reappears. */}
-      {isOffHours && screensaverExpanded && portalMounted && createPortal(
+      {isOffHours && screensaverExpanded && !screensaverManual && portalMounted && createPortal(
         <div
           style={{ position: "fixed", inset: 0, background: "#000", zIndex: 300 }}
           onTouchStart={e => e.stopPropagation()}
