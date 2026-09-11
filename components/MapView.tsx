@@ -117,7 +117,8 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
       "locate-start":            "Start",
       "locate-focus":            "Destination",
       "nav-connector-lift":      "Lift Only",
-      "nav-connector-escalator": "Escalator / Stairs Only",
+      "nav-connector-escalator": "Escalator Only",
+      "nav-connector-stairs":    "Stairs Only",
     };
     const attachTooltips = () => {
       // Inject kiosk overrides into wayfinder shadow DOM.
@@ -172,12 +173,14 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
           /* Active (connector toggled on): blue background, white icon */
           .wayfinder-locate-button[data-active='true'],
           [data-action="nav-connector-lift"][data-active='true'],
-          [data-action="nav-connector-escalator"][data-active='true'] {
+          [data-action="nav-connector-escalator"][data-active='true'],
+          [data-action="nav-connector-stairs"][data-active='true'] {
             background-color: #6E96FF !important;
           }
           .wayfinder-locate-button[data-active='true'] img,
           [data-action="nav-connector-lift"][data-active='true'] img,
-          [data-action="nav-connector-escalator"][data-active='true'] img {
+          [data-action="nav-connector-escalator"][data-active='true'] img,
+          [data-action="nav-connector-stairs"][data-active='true'] img {
             filter: brightness(0) invert(1) !important;
           }
 
@@ -246,34 +249,26 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
       // phase. This fires BEFORE the engine's shadow DOM listeners, so stopImmediatePropagation
       // prevents the engine from processing the click with its stale cached destination (#Ts).
       // We handle routing ourselves with the always-current currentDestRef / navigateFnRef.
-      //
-      // Note: the engine only has nav-connector-lift and nav-connector-escalator buttons.
-      // nav-connector-stairs does not exist in this engine version.
-      //
-      // After we call navigateTo() the engine's internal #Wr() runs synchronously and resets
-      // data-active on both buttons based on its own #js field (which we never update since
-      // we intercepted the click). navigateFnRef.current re-applies data-active after navigateTo
-      // returns so the correct button shows as blue.
-      const CONNECTOR_CONSTRAINTS: Record<string, string> = {
-        "nav-connector-lift":      "lift-only",
-        "nav-connector-escalator": "escalator-only",
-      };
       map.addEventListener("click", (e: Event) => {
         try {
           const btn = e.composedPath().find((el) => {
             const action = (el as HTMLElement).dataset?.action;
-            return action === "nav-connector-lift" || action === "nav-connector-escalator";
+            return action === "nav-connector-lift" || action === "nav-connector-escalator" || action === "nav-connector-stairs";
           }) as HTMLElement | undefined;
           if (!btn) return;
 
           e.stopImmediatePropagation();
 
+          const CONNECTOR_CONSTRAINTS: Record<string, string> = {
+            "nav-connector-lift":      "lift-only",
+            "nav-connector-escalator": "escalator-only",
+            "nav-connector-stairs":    "stairs-only",
+          };
           const constraint = CONNECTOR_CONSTRAINTS[btn.dataset.action!];
           const newMode = connectorModeRef.current === constraint ? null : constraint;
           connectorModeRef.current = newMode;
 
-          // Optimistically set button active states. navigateFnRef.current will re-apply
-          // these after navigateTo() returns (engine resets them inside the call via #Wr()).
+          // Update button active states — engine's handler won't run since we stopped the event.
           const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
           if (shadow) {
             for (const [action, mode] of Object.entries(CONNECTOR_CONSTRAINTS)) {
@@ -454,35 +449,16 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
             if (result?.success) {
               // floor-changed handles scroll when floor changes; fall back for same-floor case
               setTimeout(scrollActiveLevel, 100);
-              // Re-apply connector button active state. The engine's #Wr() runs synchronously
-              // inside navigateTo() and resets data-active based on its internal #js field,
-              // which we never update (we intercepted the click). Re-apply here so the tapped
-              // button correctly shows as blue after the engine resets it.
-              if (connectorConstraint != null) {
-                try {
-                  const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
-                  if (shadow) {
-                    const ACTION_FOR: Record<string, string> = {
-                      "lift-only": "nav-connector-lift",
-                      "escalator-only": "nav-connector-escalator",
-                    };
-                    for (const [c, action] of Object.entries(ACTION_FOR)) {
-                      const el = shadow.querySelector<HTMLElement>(`[data-action="${action}"]`);
-                      if (el) el.dataset.active = connectorConstraint === c ? "true" : "false";
-                    }
-                  }
-                } catch (_) {}
-              }
               return;
             }
-            // Constrained route failed (e.g. no lift on this path) — reset button state
+            // Constrained route failed (e.g. no escalator on this path) — reset button state
             // and fall back to unconstrained route so a path is always shown.
             if (connectorConstraint != null) {
               connectorModeRef.current = null;
               try {
                 const shadow = (map as HTMLElement & { shadowRoot: ShadowRoot }).shadowRoot;
                 if (shadow) {
-                  ["nav-connector-lift", "nav-connector-escalator"].forEach(action => {
+                  ["nav-connector-lift", "nav-connector-escalator", "nav-connector-stairs"].forEach(action => {
                     const el = shadow.querySelector<HTMLElement>(`[data-action="${action}"]`);
                     if (el) el.dataset.active = "false";
                   });

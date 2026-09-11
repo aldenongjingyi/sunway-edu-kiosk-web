@@ -159,11 +159,11 @@ function processStaffData(staffs: Staff[], locations: Location[]) {
   });
 }
 
-async function fetchGzip(url: string, timeoutMs = 8000): Promise<unknown> {
+async function fetchGzip(url: string): Promise<unknown> {
   const bust = `&_=${Date.now()}`;
   const t0 = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), 8000); // fail fast offline
   try {
     const res = await fetch(
       `https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(url)}${bust}`,
@@ -265,8 +265,7 @@ export const useDataStore = create<DataStore>((set, get) => ({
     // Fetch fresh from network.
     try {
       const raw = await fetchGzip(
-        "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615",
-        20000 // izone.sunway.edu.my is slow — give it 20s on mobile (no cache on first visit)
+        "https://izone.sunway.edu.my/segfeeds/staff/mycampus/bd2fd99be3e0c4b144e3c3c3a3f7a22999cf8615"
       ) as Staff[];
       try { localStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(raw)); } catch {}
       const staffs = processStaffData(raw, get().locations);
