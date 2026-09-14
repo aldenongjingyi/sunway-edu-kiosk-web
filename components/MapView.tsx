@@ -533,67 +533,66 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
         pointerEvents: destinationId ? "auto" : "none",
       }}
     >
-      {/* Location detail card — Pyramid style. Hidden in mobile QR-scan mode (sessionKioskNodeId set). */}
+      {/* Location detail card — beside back button. Hidden in mobile QR-scan mode (sessionKioskNodeId set). */}
       {destinationLocation && destinationId && !sessionKioskNodeId && (
         <div style={{
           position: "absolute",
           top: 16, left: 76,
           zIndex: 10,
-          background: "rgba(255,255,255,0.95)",
-          borderRadius: 8,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.28)",
-          maxWidth: 460,
+          background: "#fff",
+          borderRadius: 16,
+          boxShadow: "0 4px 20px rgba(0,0,34,0.14)",
+          overflow: "hidden",
+          width: 480,
           fontFamily: "var(--font-body)",
           cursor: qrUrl ? "pointer" : "default",
         }}
           onClick={qrUrl ? () => setQrModalOpen(true) : undefined}
         >
-          <div style={{ display: "flex", padding: 14, alignItems: "stretch", gap: 14 }}>
+          <div style={{ display: "flex" }}>
             {destinationLocation.images?.[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={destinationLocation.images[0]}
-                alt=""
-                style={{ width: 120, flexShrink: 0, objectFit: "cover", display: "block" }}
-                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
+              <div style={{ width: 160, flexShrink: 0, padding: 8, display: "flex" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={destinationLocation.images[0]}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 8, border: "3px solid #000" }}
+                  onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
+                />
+              </div>
             ) : (
               <div style={{
-                width: 120, flexShrink: 0,
-                background: "#DCDCDC", display: "flex", alignItems: "center", justifyContent: "center",
+                width: 160, flexShrink: 0,
+                background: "#e8ecf5", display: "flex", alignItems: "center", justifyContent: "center",
               }}>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#9ca3af"/>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6E96FF"/>
                 </svg>
               </div>
             )}
-            <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, padding: "16px 18px", justifyContent: "center", gap: 6 }}>
               <div>
-                <p style={{ fontSize: 20, fontFamily: "var(--font-head)", fontWeight: 600, color: "#000", lineHeight: 1.2, wordBreak: "break-word", margin: 0 }}>
+                <p style={{ fontSize: 18, fontWeight: 700, color: "#111827", lineHeight: 1.2, wordBreak: "break-word", margin: 0 }}>
                   {destinationLocation.title}
                 </p>
-                <div style={{ height: 6 }} />
                 {destinationLocation.levelTitles && destinationLocation.levelTitles.length > 0 && (
-                  <p style={{ fontSize: 14, fontWeight: 400, color: "#444", margin: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 400, color: "#6b7280", margin: 0, marginTop: 3 }}>
                     {destinationLocation.levelTitles.join(" ")}
                   </p>
                 )}
               </div>
               {qrUrl && (
-                <div style={{ background: "#DCDCDC", padding: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ background: "#fff", flexShrink: 0, lineHeight: 0 }}>
-                      <QRCode value={qrUrl} size={66} />
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "#000", margin: 0 }}>
-                        Get live indoor navigation
-                      </p>
-                      <div style={{ height: 5 }} />
-                      <p style={{ fontSize: 12, color: "#000", margin: 0, lineHeight: 1.4 }}>
-                        Scan QR to get live indoor navigation on your phone.
-                      </p>
-                    </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flexShrink: 0, lineHeight: 0 }}>
+                    <QRCode value={qrUrl} size={76} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: 0, marginBottom: 4 }}>
+                      Get live indoor navigation
+                    </p>
+                    <p style={{ fontSize: 11, color: "#6b7280", margin: 0, lineHeight: 1.4 }}>
+                      Scan QR to get live indoor navigation on your phone.
+                    </p>
                   </div>
                 </div>
               )}
@@ -660,26 +659,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
       />
     </div>
   );
-  // Mobile QR: portal the back button so it composites above the wayfinder GPU layer on iOS Chrome.
-  // Same GPU compositing issue as Android WebView — must be at document.body level to appear above.
-  const mobileQrBackButton = sessionKioskNodeId && destinationId ? createPortal(
-    <button
-      onClick={onClose}
-      style={{
-        position: "fixed", top: 16, left: 16, zIndex: 9999,
-        width: 44, height: 44, borderRadius: "50%",
-        background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        border: "none", cursor: "pointer",
-      }}
-    >
-      <svg width="9" height="15" viewBox="0 0 9 15" fill="none">
-        <path d="M8 1L1.5 7.5 8 14" stroke="#00226B" strokeWidth="2"
-          strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </button>,
-    document.body
-  ) : null;
+  // Mobile QR: no back button — client wants users to stay on the scanned route.
 
   // Kiosk: portal the back button so it composites above the wayfinder GPU layer on Android WebView.
   const kioskBackButton = !sessionKioskNodeId && destinationId ? createPortal(
@@ -701,5 +681,5 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
     document.body
   ) : null;
 
-  return <>{createPortal(content, document.body)}{kioskBackButton}{mobileQrBackButton}</>;
+  return <>{createPortal(content, document.body)}{kioskBackButton}</>;
 }

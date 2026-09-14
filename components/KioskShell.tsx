@@ -120,12 +120,14 @@ function FooterBanner() {
 
       <div style={{
         flexShrink: 0,
-        background: "linear-gradient(to bottom, #00226B, #1a5fc8)",
+        background: "#fff",
+        borderTop: "1px solid #e5e7eb",
+        borderBottom: "1px solid #e5e7eb",
         display: "flex", alignItems: "center",
         padding: "14px 20px", gap: 16,
         fontFamily: "var(--font-body)",
       }}>
-        {/* QR code — tap to enlarge (Pyramid behaviour) */}
+        {/* QR code — tap to enlarge */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`${ASSET_PREFIX}/banner-qr.png`}
@@ -134,20 +136,12 @@ function FooterBanner() {
           onClick={() => setQrExpanded(true)}
         />
 
-        {/* App icon */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`${ASSET_PREFIX}/mycampus-icon.png`}
-          alt="MyCampus"
-          style={{ width: 62, height: 62, flexShrink: 0 }}
-        />
-
         {/* Text */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 5 }}>
+          <p style={{ fontSize: 15, fontWeight: 700, color: "#000", lineHeight: 1.3, marginBottom: 5 }}>
             Navigate using your phone!
           </p>
-          <p style={{ fontSize: 12, fontWeight: 300, color: "rgba(255,255,255,0.85)", lineHeight: 1.4 }}>
+          <p style={{ fontSize: 12, fontWeight: 300, color: "#6b7280", lineHeight: 1.4 }}>
             Scan and download our MyCampus Mobile App now!
           </p>
         </div>
@@ -821,10 +815,11 @@ export default function KioskShell() {
           value={query}
           onChange={e => handleQueryChange(e.target.value)}
           onFocus={resetIdle}
+          style={urlParams ? { fontSize: 14, padding: "8px 12px" } : undefined}
         />
         <button
           onClick={handleClear}
-          className="flex-shrink-0 px-4 py-2 rounded-lg text-white text-[15px] font-medium"
+          className={`flex-shrink-0 px-4 py-2 rounded-lg text-white ${urlParams ? "text-[13px]" : "text-[15px]"} font-medium`}
           style={{ backgroundColor: "var(--navy)" }}
         >
           Clear
@@ -839,6 +834,7 @@ export default function KioskShell() {
               <button
                 key={t}
                 className={`segment-btn ${tab === i ? "active" : ""}`}
+                style={urlParams ? { fontSize: 11, padding: "5px 6px" } : undefined}
                 onClick={() => handleTabChange(i)}
               >
                 {t}

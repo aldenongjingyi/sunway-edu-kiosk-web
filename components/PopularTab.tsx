@@ -41,7 +41,7 @@ export default function PopularTab({ onSelect, compact }: { onSelect: (text: str
         {trendings.map(t => (
           <button
             key={t.id}
-            className="w-full text-center py-3 text-[22px] text-black font-light row-press"
+            className={`w-full text-center py-3 ${compact ? "text-[16px]" : "text-[22px]"} text-black font-light row-press`}
             onClick={() => onSelect(t.title)}
           >
             {t.title}
@@ -51,8 +51,8 @@ export default function PopularTab({ onSelect, compact }: { onSelect: (text: str
 
       {/* Emergency hotline */}
       <div className="text-center pb-8 pt-6">
-        <p className="text-[28px] font-semibold" style={{ color: "var(--red)" }}>+603-7491 8777</p>
-        <p className="text-[14px] text-[#6b6b6b] mt-1">24 Hours Emergency Hotline</p>
+        <p className={`${compact ? "text-[20px]" : "text-[28px]"} font-semibold`} style={{ color: "var(--red)" }}>+603-7491 8777</p>
+        <p className={`${compact ? "text-[12px]" : "text-[14px]"} text-[#6b6b6b] mt-1`}>24 Hours Emergency Hotline</p>
       </div>
     </div>
   );
