@@ -370,8 +370,19 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
         );
       if (candidates.length > 0) map.setAttribute("you-are-here-node-id", String(candidates[0].location!));
     };
+    const applyLabelStyle = () => {
+      // On QR mobile, reduce label font size. The JSX attributes may have changed
+      // BEFORE the engine finished init (attributeChangedCallback bails when !isInitialized).
+      // Re-apply here after ready to ensure the engine picks up the values.
+      if (sessionKioskNodeIdRef.current) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (map as any).engine?.setLocationLabelStyle?.({ fontSize: 3, minFontSize: 2 });
+        } catch (_) {}
+      }
+    };
     const setup = () => {
-      applyYouAreHere(); applyRotation(); attachTooltips(); interceptConnectors(); routeFloorIndicators(); autoScrollLevel();
+      applyYouAreHere(); applyRotation(); applyLabelStyle(); attachTooltips(); interceptConnectors(); routeFloorIndicators(); autoScrollLevel();
       // On iOS Chrome, getBoundingClientRect() returns wrong dimensions when the element
       // first connects (layout not yet complete). Force ResizeObserver to re-fire with
       // correct dimensions by briefly changing the element width by 1px then restoring it.
@@ -656,7 +667,10 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
         map-marker-connector-bg-color="#6E96FF"
         map-label-background-color="transparent"
         map-marker-start-size="51"
+        mobile-label-font-size={sessionKioskNodeId ? "3" : undefined}
+        mobile-label-min-font-size={sessionKioskNodeId ? "2" : undefined}
         label-font-size={sessionKioskNodeId ? "3" : "5"}
+        label-min-font-size={sessionKioskNodeId ? "2" : undefined}
       />
     </div>
   );
