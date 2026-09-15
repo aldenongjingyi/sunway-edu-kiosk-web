@@ -120,9 +120,7 @@ function FooterBanner() {
 
       <div style={{
         flexShrink: 0,
-        background: "#fff",
-        borderTop: "1px solid #e5e7eb",
-        borderBottom: "1px solid #e5e7eb",
+        background: "linear-gradient(to bottom, #273A7B, #4A6FA5)",
         display: "flex", alignItems: "center",
         padding: "14px 20px", gap: 16,
         fontFamily: "var(--font-body)",
@@ -138,10 +136,10 @@ function FooterBanner() {
 
         {/* Text */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 15, fontWeight: 700, color: "#000", lineHeight: 1.3, marginBottom: 5 }}>
+          <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 5 }}>
             Navigate using your phone!
           </p>
-          <p style={{ fontSize: 12, fontWeight: 300, color: "#6b7280", lineHeight: 1.4 }}>
+          <p style={{ fontSize: 12, fontWeight: 300, color: "rgba(255,255,255,0.85)", lineHeight: 1.4 }}>
             Scan and download our MyCampus Mobile App now!
           </p>
         </div>

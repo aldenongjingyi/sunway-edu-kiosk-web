@@ -556,7 +556,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
                 <img
                   src={destinationLocation.images[0]}
                   alt=""
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 8, border: "3px solid #000" }}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 8 }}
                   onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
                 />
               </div>
