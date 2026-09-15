@@ -656,6 +656,7 @@ export default function MapView({ destinationId, targetFloorCode, sessionKioskNo
         map-marker-connector-bg-color="#6E96FF"
         map-label-background-color="transparent"
         map-marker-start-size="51"
+        label-font-size={sessionKioskNodeId ? "3" : "5"}
       />
     </div>
   );
