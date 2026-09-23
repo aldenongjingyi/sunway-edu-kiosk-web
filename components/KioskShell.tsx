@@ -723,6 +723,19 @@ export default function KioskShell() {
     </>
   );
 
+  // QR-only build: block access to the kiosk UI unless valid navigation params are present.
+  // Users could edit/strip the URL to reach the full kiosk — show a message instead.
+  const isQrBuild = ASSET_PREFIX.includes("qrcode");
+  if (isQrBuild && !urlParams) {
+    return (
+      <div className="h-full bg-white flex items-center justify-center px-8">
+        <p style={{ fontSize: 16, color: "#6b7280", textAlign: "center", lineHeight: 1.5 }}>
+          Scan the QR code on the kiosk to navigate.
+        </p>
+      </div>
+    );
+  }
+
   const compact = !!urlParams;
 
   const content = showResults ? (
