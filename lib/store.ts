@@ -259,7 +259,11 @@ export const useDataStore = create<DataStore>((set, get) => ({
     // Falls back to the CF Worker proxy which may be captcha-blocked by izone.sunway.edu.my.
     try {
       let raw: Staff[] | null = null;
-      const staffUrl = "https://maps-sunwayedu.getmallapp.com/staff.json";
+      const staffDirect = "https://maps-sunwayedu.getmallapp.com/staff.json";
+      const sameOrigin = typeof window !== "undefined" && window.location.origin === new URL(staffDirect).origin;
+      const staffUrl = sameOrigin
+        ? staffDirect
+        : `https://sunway-kiosk-proxy.sunway-kiosk.workers.dev/?url=${encodeURIComponent(staffDirect)}`;
       try {
         const st0 = Date.now();
         const staticRes = await fetch(staffUrl, { cache: "no-store" });
