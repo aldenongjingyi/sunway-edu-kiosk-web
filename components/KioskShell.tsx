@@ -397,6 +397,7 @@ export default function KioskShell() {
     if (hasQrParamsRef.current) return; // no idle/screensaver on mobile QR page
     const seconds = mapOpenRef.current ? MAP_IDLE_SECONDS : IDLE_SECONDS;
     idleRef.current = setTimeout(() => {
+      if (document.activeElement === inputRef.current) { resetIdle(); return; }
       hdx.addAction("ui.screensaver.expand", { source: mapOpenRef.current ? "map" : "main", idleSeconds: seconds });
       setScreensaverManual(false); // idle expansion — respect off-hours black screen
       setScreensaverExpanded(true);
@@ -778,6 +779,10 @@ export default function KioskShell() {
               onFocus={resetIdle}
               onKeyDown={e => { if (e.key === "Enter") inputRef.current?.blur(); }}
               enterKeyHint="search"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
             />
             <button onClick={handleClear} className="v1-clear">Clear</button>
           </div>
@@ -800,7 +805,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #34</p>
+            <p>Version 1.0 Build #35</p>
             <p>Refreshed {formatKLTime(pageLoadTime)}</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
@@ -830,6 +835,10 @@ export default function KioskShell() {
           onFocus={resetIdle}
           onKeyDown={e => { if (e.key === "Enter") inputRef.current?.blur(); }}
           enterKeyHint="search"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           style={urlParams ? { fontSize: 14, padding: "8px 12px" } : undefined}
         />
         <button
@@ -869,7 +878,7 @@ export default function KioskShell() {
       {/* Footer version info — hidden in mobile QR mode */}
       {!showResults && tab === 0 && !urlParams && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #34</p>
+          <p>Version 1.0 Build #35</p>
           <p>Refreshed {formatKLTime(pageLoadTime)}</p>
         </div>
       )}
