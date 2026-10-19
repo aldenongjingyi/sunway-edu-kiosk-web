@@ -336,7 +336,7 @@ export default function KioskShell() {
       // Skip screensaver when launched via QR URL param — user wants the map immediately.
       // During off-hours, also skip immediate expansion — let the idle timer trigger the
       // black screen after IDLE_SECONDS of no interaction instead of showing it on every load/refresh.
-      if (!hasQrParamsRef.current && !isOffHoursKL()) setScreensaverExpanded(true);
+      if (!hasQrParamsRef.current && !isOffHoursKL() && document.activeElement !== inputRef.current) setScreensaverExpanded(true);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadData, loadStaff]);
@@ -445,6 +445,11 @@ export default function KioskShell() {
     if (!expanding) hdx.addAction("ui.screensaver.dismiss");
     setScreensaverExpanded(expanding);
     setScreensaverManual(expanding); // manual tap → never show off-hours black
+    resetIdle();
+  };
+
+  const handleInputFocus = () => {
+    setScreensaverExpanded(false);
     resetIdle();
   };
 
@@ -776,7 +781,7 @@ export default function KioskShell() {
               placeholder="Search facilities, offices, staff…"
               value={query}
               onChange={e => handleQueryChange(e.target.value)}
-              onFocus={resetIdle}
+              onFocus={handleInputFocus}
               onKeyDown={e => { if (e.key === "Enter") inputRef.current?.blur(); }}
               enterKeyHint="search"
               autoComplete="off"
@@ -832,7 +837,7 @@ export default function KioskShell() {
           placeholder="Tap Here To Search"
           value={query}
           onChange={e => handleQueryChange(e.target.value)}
-          onFocus={resetIdle}
+          onFocus={handleInputFocus}
           onKeyDown={e => { if (e.key === "Enter") inputRef.current?.blur(); }}
           enterKeyHint="search"
           autoComplete="off"
