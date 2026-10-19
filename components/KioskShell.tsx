@@ -776,6 +776,8 @@ export default function KioskShell() {
               value={query}
               onChange={e => handleQueryChange(e.target.value)}
               onFocus={resetIdle}
+              onKeyDown={e => { if (e.key === "Enter") inputRef.current?.blur(); }}
+              enterKeyHint="search"
             />
             <button onClick={handleClear} className="v1-clear">Clear</button>
           </div>
@@ -798,7 +800,7 @@ export default function KioskShell() {
 
         {!showResults && (
           <div className="text-center pb-4 flex-shrink-0" style={{ fontSize: 11, color: "#aeaeb2", lineHeight: 1.8 }}>
-            <p>Version 1.0 Build #33</p>
+            <p>Version 1.0 Build #34</p>
             <p>Refreshed {formatKLTime(pageLoadTime)}</p>
             <p>-</p>
             <p>Data {formatTimestamp(lastRefreshed)}</p>
@@ -826,6 +828,8 @@ export default function KioskShell() {
           value={query}
           onChange={e => handleQueryChange(e.target.value)}
           onFocus={resetIdle}
+          onKeyDown={e => { if (e.key === "Enter") inputRef.current?.blur(); }}
+          enterKeyHint="search"
           style={urlParams ? { fontSize: 14, padding: "8px 12px" } : undefined}
         />
         <button
@@ -865,7 +869,7 @@ export default function KioskShell() {
       {/* Footer version info — hidden in mobile QR mode */}
       {!showResults && tab === 0 && !urlParams && (
         <div className="text-center pb-3 text-[11px] text-[#aeaeb2] flex-shrink-0">
-          <p>Version 1.0 Build #33</p>
+          <p>Version 1.0 Build #34</p>
           <p>Refreshed {formatKLTime(pageLoadTime)}</p>
         </div>
       )}
